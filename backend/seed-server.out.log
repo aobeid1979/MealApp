@@ -1,0 +1,52 @@
+fail: Microsoft.EntityFrameworkCore.Database.Connection[20004]
+      An error occurred using the connection to database 'MealAppDb' on server '(localdb)\mssqllocaldb'.
+fail: Microsoft.EntityFrameworkCore.Query[10100]
+      An exception occurred while iterating over the results of a query for context type 'MealApp.Data.ApplicationDbContext'.
+      System.AggregateException: An error occurred while writing to logger(s). (Cannot open log for source '.NET Runtime'. You may not have write access.)
+       ---> System.InvalidOperationException: Cannot open log for source '.NET Runtime'. You may not have write access.
+       ---> System.ComponentModel.Win32Exception (5): Access is denied.
+         --- End of inner exception stack trace ---
+         at System.Diagnostics.EventLogInternal.OpenForWrite(String currentMachineName)
+         at System.Diagnostics.EventLogInternal.InternalWriteEvent(UInt32 eventID, UInt16 category, EventLogEntryType type, String[] strings, Byte[] rawData, String currentMachineName)
+         at System.Diagnostics.EventLogInternal.WriteEvent(EventInstance instance, Byte[] data, Object[] values)
+         at Microsoft.Extensions.Logging.EventLog.WindowsEventLog.WriteEntry(String message, EventLogEntryType type, Int32 eventID, Int16 category)
+         at Microsoft.Extensions.Logging.EventLog.EventLogLogger.WriteMessage(String message, EventLogEntryType eventLogEntryType, Int32 eventId)
+         at Microsoft.Extensions.Logging.EventLog.EventLogLogger.Log[TState](LogLevel logLevel, EventId eventId, TState state, Exception exception, Func`3 formatter)
+         at Microsoft.Extensions.Logging.Logger.<Log>g__LoggerLog|14_0[TState](LogLevel logLevel, EventId eventId, ILogger logger, Exception exception, Func`3 formatter, List`1& exceptions, TState& state)
+         --- End of inner exception stack trace ---
+         at Microsoft.Extensions.Logging.Logger.ThrowLoggingError(List`1 exceptions)
+         at Microsoft.Extensions.Logging.Logger.Log[TState](LogLevel logLevel, EventId eventId, TState state, Exception exception, Func`3 formatter)
+         at Microsoft.Extensions.Logging.LoggerMessage.<>c__DisplayClass12_0`2.<Define>g__Log|0(ILogger logger, T1 arg1, T2 arg2, Exception exception)
+         at Microsoft.EntityFrameworkCore.Diagnostics.EventDefinition`2.Log[TLoggerCategory](IDiagnosticsLogger`1 logger, TParam1 arg1, TParam2 arg2)
+         at Microsoft.EntityFrameworkCore.Diagnostics.Internal.RelationalConnectionDiagnosticsLogger.LogConnectionError(IRelationalConnection connection, EventDefinition`2 definition)
+         at Microsoft.EntityFrameworkCore.Diagnostics.Internal.RelationalConnectionDiagnosticsLogger.ConnectionErrorAsync(IRelationalConnection connection, Exception exception, DateTimeOffset startTime, TimeSpan duration, Boolean logErrorAsDebug, CancellationToken cancellationToken)
+         at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+         at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenAsync(CancellationToken cancellationToken, Boolean errorsExpected)
+         at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+         at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+         at Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal.SqlServerExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+         at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+      System.AggregateException: An error occurred while writing to logger(s). (Cannot open log for source '.NET Runtime'. You may not have write access.)
+       ---> System.InvalidOperationException: Cannot open log for source '.NET Runtime'. You may not have write access.
+       ---> System.ComponentModel.Win32Exception (5): Access is denied.
+         --- End of inner exception stack trace ---
+         at System.Diagnostics.EventLogInternal.OpenForWrite(String currentMachineName)
+         at System.Diagnostics.EventLogInternal.InternalWriteEvent(UInt32 eventID, UInt16 category, EventLogEntryType type, String[] strings, Byte[] rawData, String currentMachineName)
+         at System.Diagnostics.EventLogInternal.WriteEvent(EventInstance instance, Byte[] data, Object[] values)
+         at Microsoft.Extensions.Logging.EventLog.WindowsEventLog.WriteEntry(String message, EventLogEntryType type, Int32 eventID, Int16 category)
+         at Microsoft.Extensions.Logging.EventLog.EventLogLogger.WriteMessage(String message, EventLogEntryType eventLogEntryType, Int32 eventId)
+         at Microsoft.Extensions.Logging.EventLog.EventLogLogger.Log[TState](LogLevel logLevel, EventId eventId, TState state, Exception exception, Func`3 formatter)
+         at Microsoft.Extensions.Logging.Logger.<Log>g__LoggerLog|14_0[TState](LogLevel logLevel, EventId eventId, ILogger logger, Exception exception, Func`3 formatter, List`1& exceptions, TState& state)
+         --- End of inner exception stack trace ---
+         at Microsoft.Extensions.Logging.Logger.ThrowLoggingError(List`1 exceptions)
+         at Microsoft.Extensions.Logging.Logger.Log[TState](LogLevel logLevel, EventId eventId, TState state, Exception exception, Func`3 formatter)
+         at Microsoft.Extensions.Logging.LoggerMessage.<>c__DisplayClass12_0`2.<Define>g__Log|0(ILogger logger, T1 arg1, T2 arg2, Exception exception)
+         at Microsoft.EntityFrameworkCore.Diagnostics.EventDefinition`2.Log[TLoggerCategory](IDiagnosticsLogger`1 logger, TParam1 arg1, TParam2 arg2)
+         at Microsoft.EntityFrameworkCore.Diagnostics.Internal.RelationalConnectionDiagnosticsLogger.LogConnectionError(IRelationalConnection connection, EventDefinition`2 definition)
+         at Microsoft.EntityFrameworkCore.Diagnostics.Internal.RelationalConnectionDiagnosticsLogger.ConnectionErrorAsync(IRelationalConnection connection, Exception exception, DateTimeOffset startTime, TimeSpan duration, Boolean logErrorAsDebug, CancellationToken cancellationToken)
+         at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenInternalAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+         at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenAsync(CancellationToken cancellationToken, Boolean errorsExpected)
+         at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+         at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(AsyncEnumerator enumerator, CancellationToken cancellationToken)
+         at Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal.SqlServerExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+         at Microsoft.EntityFrameworkCore.Query.Internal.SingleQueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
