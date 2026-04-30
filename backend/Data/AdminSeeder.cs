@@ -5,7 +5,6 @@ namespace MealApp.Data;
 
 public static class AdminSeeder
 {
-    private const string AdminEmail = "amfo250@gmail.com";
     private const string AdminName = "Ammar";
     private const string AdminRole = "Admin";
 
@@ -14,7 +13,13 @@ public static class AdminSeeder
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
         var userManager = serviceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var roleManager = serviceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+        var email = configuration["AdminUser:Email"];
         var password = configuration["AdminUser:Password"];
+
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return;
+        }
 
         if (string.IsNullOrWhiteSpace(password))
         {
@@ -26,14 +31,14 @@ public static class AdminSeeder
             await roleManager.CreateAsync(new IdentityRole(AdminRole));
         }
 
-        var adminUser = await userManager.FindByEmailAsync(AdminEmail);
+        var adminUser = await userManager.FindByEmailAsync(email);
 
         if (adminUser is null)
         {
             adminUser = new ApplicationUser
             {
-                UserName = AdminEmail,
-                Email = AdminEmail,
+                UserName = email,
+                Email = email,
                 Name = AdminName,
                 EmailConfirmed = true
             };

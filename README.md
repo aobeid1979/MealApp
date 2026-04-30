@@ -10,18 +10,18 @@ For local development, use .NET User Secrets from the backend project folder.
 ```powershell
 cd backend
 dotnet user-secrets set "Jwt:Secret" "replace-with-a-long-random-secret-key"
+dotnet user-secrets set "AdminUser:Email" "admin@example.com"
 dotnet user-secrets set "AdminUser:Password" "replace-with-a-strong-admin-password"
 ```
 
-The default seeded admin account is:
+The default seeded admin account uses the email configured in `AdminUser:Email`:
 
 ```text
-Email: amfo250@gmail.com
 Name: Ammar
 Role: Admin
 ```
 
-The admin user is created only when `AdminUser:Password` is configured.
+The admin user is created only when both `AdminUser:Email` and `AdminUser:Password` are configured.
 If the admin user already exists, the app will not create a duplicate.
 
 ## Environment Variable Alternative
@@ -32,6 +32,7 @@ PowerShell:
 
 ```powershell
 $env:Jwt__Secret = "replace-with-a-long-random-secret-key"
+$env:AdminUser__Email = "admin@example.com"
 $env:AdminUser__Password = "replace-with-a-strong-admin-password"
 ```
 
@@ -39,6 +40,7 @@ Windows Command Prompt:
 
 ```cmd
 set Jwt__Secret=replace-with-a-long-random-secret-key
+set AdminUser__Email=admin@example.com
 set AdminUser__Password=replace-with-a-strong-admin-password
 ```
 
