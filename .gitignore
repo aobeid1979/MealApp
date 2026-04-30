@@ -2,6 +2,8 @@
 .vs/
 bin/
 obj/
+.dotnet/
+test-build-output/
 
 # Node / Next.js
 node_modules/
