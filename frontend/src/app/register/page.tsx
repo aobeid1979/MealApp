@@ -16,12 +16,13 @@ type ApiResponse<T> = {
   statusCode: number;
 };
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 export default function RegisterPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("User");
   const [message, setMessage] = useState<string | null>(null);
   const [isError, setIsError] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -33,7 +34,7 @@ export default function RegisterPage() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("http://localhost:5280/api/auth/register", {
+      const response = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -41,8 +42,7 @@ export default function RegisterPage() {
         body: JSON.stringify({
           name,
           email,
-          password,
-          role
+          password
         })
       });
 
@@ -115,21 +115,6 @@ export default function RegisterPage() {
             required
             className="form-input"
           />
-        </div>
-
-        <div>
-          <label className="form-label" htmlFor="role">
-            Role
-          </label>
-          <select
-            id="role"
-            value={role}
-            onChange={(event) => setRole(event.target.value)}
-            className="form-input"
-          >
-            <option value="User">User</option>
-            <option value="Admin">Admin</option>
-          </select>
         </div>
 
         <button

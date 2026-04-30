@@ -8,6 +8,12 @@ public static class SampleDataSeeder
     public static async Task SeedAsync(IServiceProvider serviceProvider)
     {
         var context = serviceProvider.GetRequiredService<ApplicationDbContext>();
+        var environment = serviceProvider.GetRequiredService<IHostEnvironment>();
+
+        if (environment.IsDevelopment())
+        {
+            await CleanupBadDemoRecipesAsync(context);
+        }
 
         var categories = await SeedCategoriesAsync(context);
         var ingredientCategories = await SeedIngredientCategoriesAsync(context);
@@ -15,6 +21,26 @@ public static class SampleDataSeeder
         var ingredients = await SeedIngredientsAsync(context, ingredientCategories);
 
         await SeedRecipesAsync(context, categories, ingredients, units);
+    }
+
+    private static async Task CleanupBadDemoRecipesAsync(ApplicationDbContext context)
+    {
+        var badDemoRecipes = await context.Recipes
+            .Where(recipe => recipe.Title == "string"
+                && recipe.Description == "string"
+                && recipe.ImageUrl == "string"
+                && recipe.PreparationTimeMinutes == 0
+                && recipe.CookingTimeMinutes == 0
+                && recipe.Servings == 0)
+            .ToListAsync();
+
+        if (badDemoRecipes.Count == 0)
+        {
+            return;
+        }
+
+        context.Recipes.RemoveRange(badDemoRecipes);
+        await context.SaveChangesAsync();
     }
 
     private static async Task<Dictionary<string, Category>> SeedCategoriesAsync(ApplicationDbContext context)

@@ -51,6 +51,15 @@ builder.Services.AddCors(options =>
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
+
+var jwtSecret = builder.Configuration["Jwt:Secret"];
+
+if (string.IsNullOrWhiteSpace(jwtSecret))
+{
+    throw new InvalidOperationException(
+        "Jwt:Secret is not configured. Set it with .NET User Secrets or the Jwt__Secret environment variable.");
+}
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -67,7 +76,7 @@ builder.Services.AddAuthentication(options =>
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Secret"]!))
+                Encoding.UTF8.GetBytes(jwtSecret))
         };
     });
 
@@ -106,6 +115,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     await RoleSeeder.SeedRolesAsync(scope.ServiceProvider);
+    await AdminSeeder.SeedDefaultAdminAsync(scope.ServiceProvider);
     await SampleDataSeeder.SeedAsync(scope.ServiceProvider);
 }
 

@@ -50,6 +50,8 @@ type ApiResponse<T> = {
   statusCode: number;
 };
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 export default function ProfilePage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -67,10 +69,16 @@ export default function ProfilePage() {
 
   useEffect(() => {
     const token = localStorage.getItem("token");
+    const role = localStorage.getItem("role");
 
     if (!token) {
       localStorage.setItem("redirectPath", pathname);
       router.push("/login");
+      return;
+    }
+
+    if (role !== "User" && role !== "Admin") {
+      router.push("/");
       return;
     }
 
@@ -121,7 +129,7 @@ export default function ProfilePage() {
       }
 
       const response = await fetch(
-        `http://localhost:5280/api/favoriterecipe/${recipeId}`,
+        `${API_URL}/api/favoriterecipe/${recipeId}`,
         {
           method: "DELETE",
           headers: {
@@ -299,7 +307,7 @@ export default function ProfilePage() {
 }
 
 async function loadFavorites(token: string) {
-  const response = await fetch("http://localhost:5280/api/favoriterecipe/my", {
+  const response = await fetch(`${API_URL}/api/favoriterecipe/my`, {
     headers: {
       Authorization: "Bearer " + token
     }
@@ -315,7 +323,7 @@ async function loadFavorites(token: string) {
 }
 
 async function loadMealPlans(token: string) {
-  const response = await fetch("http://localhost:5280/api/mealplan/my", {
+  const response = await fetch(`${API_URL}/api/mealplan/my`, {
     headers: {
       Authorization: "Bearer " + token
     }
@@ -331,7 +339,7 @@ async function loadMealPlans(token: string) {
 }
 
 async function loadShoppingLists(token: string) {
-  const response = await fetch("http://localhost:5280/api/shoppinglist/my", {
+  const response = await fetch(`${API_URL}/api/shoppinglist/my`, {
     headers: {
       Authorization: "Bearer " + token
     }

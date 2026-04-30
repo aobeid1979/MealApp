@@ -28,6 +28,8 @@ type ApiResponse<T> = {
   statusCode: number;
 };
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 const heroImageUrl =
   "https://images.unsplash.com/photo-1498837167922-ddd27525d352";
 
@@ -41,8 +43,8 @@ export default function Home() {
     async function loadHomeData() {
       try {
         const [recipeResponse, categoryResponse] = await Promise.all([
-          fetch("http://localhost:5280/api/recipe"),
-          fetch("http://localhost:5280/api/category")
+          fetch(`${API_URL}/api/recipe`),
+          fetch(`${API_URL}/api/category`)
         ]);
 
         const recipeData = (await recipeResponse.json()) as ApiResponse<Recipe[]>;

@@ -25,23 +25,6 @@ public class AuthController : ApiControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterDto registerDto)
     {
-        var selectedRole = string.IsNullOrWhiteSpace(registerDto.Role)
-            ? "User"
-            : registerDto.Role;
-
-        if (!string.Equals(selectedRole, "Admin", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(selectedRole, "User", StringComparison.OrdinalIgnoreCase))
-        {
-            return BadRequest(new
-            {
-                Message = "Invalid role. Allowed roles are Admin and User."
-            });
-        }
-
-        selectedRole = string.Equals(selectedRole, "Admin", StringComparison.OrdinalIgnoreCase)
-            ? "Admin"
-            : "User";
-
         var user = new ApplicationUser
         {
             UserName = registerDto.Email,
@@ -60,7 +43,7 @@ public class AuthController : ApiControllerBase
             });
         }
 
-        var roleResult = await _userManager.AddToRoleAsync(user, selectedRole);
+        var roleResult = await _userManager.AddToRoleAsync(user, "User");
 
         if (!roleResult.Succeeded)
         {
@@ -75,7 +58,7 @@ public class AuthController : ApiControllerBase
         {
             Message = "User registered successfully.",
             Email = user.Email,
-            Role = selectedRole
+            Role = "User"
         });
     }
 

@@ -47,6 +47,8 @@ type ApiResponse<T> = {
   statusCode: number;
 };
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 export default function RecipeDetailsPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -67,7 +69,7 @@ export default function RecipeDetailsPage() {
     async function fetchRecipeDetails() {
       try {
         const response = await fetch(
-          `http://localhost:5280/api/recipe/${id}/details`
+          `${API_URL}/api/recipe/${id}/details`
         );
         const data = (await response.json()) as ApiResponse<RecipeDetails>;
 
@@ -102,7 +104,7 @@ export default function RecipeDetailsPage() {
     async function fetchPreview() {
       try {
         const response = await fetch(
-          `http://localhost:5280/api/recipe/${id}/preview?servings=${selectedServings}`
+          `${API_URL}/api/recipe/${id}/preview?servings=${selectedServings}`
         );
         const data = (await response.json()) as ApiResponse<RecipeDetails>;
 
@@ -165,7 +167,7 @@ export default function RecipeDetailsPage() {
       }
 
       const today = new Date().toISOString().split("T")[0];
-      const response = await fetch("http://localhost:5280/api/mealplan", {
+      const response = await fetch(`${API_URL}/api/mealplan`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -216,7 +218,7 @@ export default function RecipeDetailsPage() {
       }
 
       const response = await fetch(
-        `http://localhost:5280/api/favoriterecipe/${recipe.id}`,
+        `${API_URL}/api/favoriterecipe/${recipe.id}`,
         {
           method: "POST",
           headers: {

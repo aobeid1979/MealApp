@@ -36,6 +36,8 @@ type ApiResponse<T> = {
   statusCode: number;
 };
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 export default function ShoppingListPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -55,10 +57,16 @@ export default function ShoppingListPage() {
   useEffect(() => {
     async function fetchShoppingLists() {
       const token = localStorage.getItem("token");
+      const role = localStorage.getItem("role");
 
       if (!token) {
         localStorage.setItem("redirectPath", pathname);
         router.push("/login");
+        return;
+      }
+
+      if (role !== "User" && role !== "Admin") {
+        router.push("/");
         return;
       }
 
@@ -89,7 +97,7 @@ export default function ShoppingListPage() {
       }
 
       const response = await fetch(
-        `http://localhost:5280/api/shoppinglist/items/${itemId}/toggle`,
+        `${API_URL}/api/shoppinglist/items/${itemId}/toggle`,
         {
           method: "PATCH",
           headers: {
@@ -145,7 +153,7 @@ export default function ShoppingListPage() {
       }
 
       const response = await fetch(
-        `http://localhost:5280/api/shoppinglist/items/${itemId}`,
+        `${API_URL}/api/shoppinglist/items/${itemId}`,
         {
           method: "PUT",
           headers: {
@@ -192,7 +200,7 @@ export default function ShoppingListPage() {
       }
 
       const response = await fetch(
-        `http://localhost:5280/api/shoppinglist/items/${itemId}`,
+        `${API_URL}/api/shoppinglist/items/${itemId}`,
         {
           method: "DELETE",
           headers: {
@@ -232,7 +240,7 @@ export default function ShoppingListPage() {
       }
 
       const response = await fetch(
-        `http://localhost:5280/api/shoppinglist/${shoppingListId}/grouped`,
+        `${API_URL}/api/shoppinglist/${shoppingListId}/grouped`,
         {
           headers: {
             Authorization: "Bearer " + token
@@ -278,7 +286,7 @@ export default function ShoppingListPage() {
       }
 
       const response = await fetch(
-        `http://localhost:5280/api/shoppinglist/${shoppingListId}`,
+        `${API_URL}/api/shoppinglist/${shoppingListId}`,
         {
           method: "PUT",
           headers: {
@@ -319,7 +327,7 @@ export default function ShoppingListPage() {
       }
 
       const response = await fetch(
-        `http://localhost:5280/api/shoppinglist/${shoppingListId}`,
+        `${API_URL}/api/shoppinglist/${shoppingListId}`,
         {
           method: "DELETE",
           headers: {
@@ -359,7 +367,7 @@ export default function ShoppingListPage() {
       }
 
       const response = await fetch(
-        `http://localhost:5280/api/shoppinglist/${shoppingListId}/checked-items`,
+        `${API_URL}/api/shoppinglist/${shoppingListId}/checked-items`,
         {
           method: "DELETE",
           headers: {
@@ -396,7 +404,7 @@ export default function ShoppingListPage() {
       }
 
       const response = await fetch(
-        `http://localhost:5280/api/shoppinglist/${shoppingListId}/items/check-state`,
+        `${API_URL}/api/shoppinglist/${shoppingListId}/items/check-state`,
         {
           method: "PATCH",
           headers: {
@@ -705,7 +713,7 @@ async function loadShoppingLists() {
     throw new Error("Login token was not found.");
   }
 
-  const response = await fetch("http://localhost:5280/api/shoppinglist/my", {
+  const response = await fetch(`${API_URL}/api/shoppinglist/my`, {
     headers: {
       Authorization: "Bearer " + token
     }

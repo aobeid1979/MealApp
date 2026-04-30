@@ -71,11 +71,13 @@ type ApiResponse<T> = {
   statusCode: number;
 };
 
-const categoriesUrl = "http://localhost:5280/api/category";
-const ingredientCategoriesUrl = "http://localhost:5280/api/ingredientcategory";
-const unitsUrl = "http://localhost:5280/api/unit";
-const recipesUrl = "http://localhost:5280/api/recipe";
-const ingredientsUrl = "http://localhost:5280/api/ingredient";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
+const categoriesUrl = `${API_URL}/api/category`;
+const ingredientCategoriesUrl = `${API_URL}/api/ingredientcategory`;
+const unitsUrl = `${API_URL}/api/unit`;
+const recipesUrl = `${API_URL}/api/recipe`;
+const ingredientsUrl = `${API_URL}/api/ingredient`;
 
 export default function AdminPage() {
   const router = useRouter();

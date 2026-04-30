@@ -23,6 +23,8 @@ type ApiResponse<T> = {
   statusCode: number;
 };
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 export default function RecipesPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -34,7 +36,7 @@ export default function RecipesPage() {
   useEffect(() => {
     async function fetchRecipes() {
       try {
-        const response = await fetch("http://localhost:5280/api/recipe");
+        const response = await fetch(`${API_URL}/api/recipe`);
         const data = (await response.json()) as ApiResponse<Recipe[]>;
 
         if (!data.isSuccess || !response.ok) {
@@ -67,7 +69,7 @@ export default function RecipesPage() {
       }
 
       const response = await fetch(
-        `http://localhost:5280/api/favoriterecipe/${recipeId}`,
+        `${API_URL}/api/favoriterecipe/${recipeId}`,
         {
           method: "POST",
           headers: {

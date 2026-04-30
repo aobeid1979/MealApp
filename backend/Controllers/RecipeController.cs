@@ -22,12 +22,6 @@ public class RecipeController : ApiControllerBase
     public async Task<IActionResult> GetAll([FromQuery] int? categoryId, [FromQuery] string? search)
     {
         var query = _context.Recipes
-            .Where(recipe => !(recipe.Title == "string"
-                && recipe.Description == "string"
-                && recipe.ImageUrl == "string"
-                && recipe.PreparationTimeMinutes == 0
-                && recipe.CookingTimeMinutes == 0
-                && recipe.Servings == 0))
             .AsQueryable();
 
         if (categoryId.HasValue)

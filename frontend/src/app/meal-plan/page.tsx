@@ -20,6 +20,8 @@ type ApiResponse<T> = {
   statusCode: number;
 };
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
 export default function MealPlanPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -37,6 +39,7 @@ export default function MealPlanPage() {
   useEffect(() => {
     async function fetchMealPlans() {
       const token = localStorage.getItem("token");
+      const role = localStorage.getItem("role");
 
       if (!token) {
         localStorage.setItem("redirectPath", pathname);
@@ -44,8 +47,13 @@ export default function MealPlanPage() {
         return;
       }
 
+      if (role !== "User" && role !== "Admin") {
+        router.push("/");
+        return;
+      }
+
       try {
-        const response = await fetch("http://localhost:5280/api/mealplan/my", {
+        const response = await fetch(`${API_URL}/api/mealplan/my`, {
           headers: {
             Authorization: "Bearer " + token
           }
@@ -82,7 +90,7 @@ export default function MealPlanPage() {
         throw new Error("Login token was not found.");
       }
 
-      const response = await fetch(`http://localhost:5280/api/mealplan/${id}`, {
+      const response = await fetch(`${API_URL}/api/mealplan/${id}`, {
         method: "DELETE",
         headers: {
           Authorization: "Bearer " + token
@@ -115,7 +123,7 @@ export default function MealPlanPage() {
       throw new Error("Login token was not found.");
     }
 
-    const response = await fetch("http://localhost:5280/api/mealplan/my", {
+    const response = await fetch(`${API_URL}/api/mealplan/my`, {
       headers: {
         Authorization: "Bearer " + token
       }
@@ -143,7 +151,7 @@ export default function MealPlanPage() {
       }
 
       const response = await fetch(
-        `http://localhost:5280/api/mealplan/my/range?from=${startDate}&to=${endDate}`,
+        `${API_URL}/api/mealplan/my/range?from=${startDate}&to=${endDate}`,
         {
           headers: {
             Authorization: "Bearer " + token
@@ -179,7 +187,7 @@ export default function MealPlanPage() {
       }
 
       const response = await fetch(
-        `http://localhost:5280/api/mealplan/my/range?from=${startDate}&to=${endDate}`,
+        `${API_URL}/api/mealplan/my/range?from=${startDate}&to=${endDate}`,
         {
           method: "DELETE",
           headers: {
@@ -221,7 +229,7 @@ export default function MealPlanPage() {
       }
 
       const response = await fetch(
-        `http://localhost:5280/api/mealplan/${mealPlan.id}`,
+        `${API_URL}/api/mealplan/${mealPlan.id}`,
         {
           method: "PUT",
           headers: {
@@ -269,7 +277,7 @@ export default function MealPlanPage() {
         throw new Error("Login token was not found.");
       }
 
-      const response = await fetch("http://localhost:5280/api/shoppinglist/generate", {
+      const response = await fetch(`${API_URL}/api/shoppinglist/generate`, {
         method: "POST",
         headers: {
           Authorization: "Bearer " + token
