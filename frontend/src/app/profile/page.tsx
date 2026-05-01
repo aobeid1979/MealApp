@@ -183,9 +183,19 @@ export default function ProfilePage() {
         )}
 
         {!isLoadingFavorites && favorites.length === 0 && (
-          <p className="mt-4 text-sm text-slate-600">
-            No favorite recipes yet.
-          </p>
+          <div className="mt-4 flex items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center">
+            <div className="max-w-md">
+              <h3 className="text-lg font-semibold text-slate-900">
+                No favorite recipes yet.
+              </h3>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Browse recipes and save the meals you want to come back to.
+              </p>
+              <Link href="/recipes" className="primary-button mt-6 inline-flex">
+                Browse Recipes
+              </Link>
+            </div>
+          </div>
         )}
 
         {!isLoadingFavorites && favorites.length > 0 && (

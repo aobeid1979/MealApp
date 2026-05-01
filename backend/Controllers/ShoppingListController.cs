@@ -398,6 +398,42 @@ public class ShoppingListController : ApiControllerBase
         });
     }
 
+    [HttpDelete("{id}/items")]
+    public async Task<IActionResult> ClearItems(int id)
+    {
+        var userId = GetCurrentUserId();
+
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        var shoppingListExists = await _context.ShoppingLists
+            .AnyAsync(shoppingList => shoppingList.Id == id && shoppingList.UserId == userId);
+
+        if (!shoppingListExists)
+        {
+            return NotFound(new
+            {
+                Message = "Shopping list not found."
+            });
+        }
+
+        var items = await _context.ShoppingListItems
+            .Where(item => item.ShoppingListId == id
+                && item.ShoppingList != null
+                && item.ShoppingList.UserId == userId)
+            .ToListAsync();
+
+        _context.ShoppingListItems.RemoveRange(items);
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            Message = "Shopping list cleared successfully."
+        });
+    }
+
     [HttpPatch("{id}/items/check-state")]
     public async Task<IActionResult> UpdateItemsCheckState(
         int id,

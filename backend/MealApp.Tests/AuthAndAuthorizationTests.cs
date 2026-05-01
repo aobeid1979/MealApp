@@ -128,6 +128,184 @@ public class AuthAndAuthorizationTests
         Assert.Equal(HttpStatusCode.Created, recipeResponse.StatusCode);
     }
 
+    [Fact]
+    public async Task User_CanAddExistingIngredientToShoppingList()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(client, email);
+        var setup = await CreateShoppingListSetupAsync(factory, email);
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var firstResponse = await client.PostAsJsonAsync($"/api/shoppinglist/{setup.ShoppingListId}/items", new
+        {
+            ingredientId = setup.IngredientId,
+            quantity = 2,
+            unitId = setup.UnitId
+        });
+
+        await EnsureSuccessAsync(firstResponse);
+
+        var duplicateResponse = await client.PostAsJsonAsync($"/api/shoppinglist/{setup.ShoppingListId}/items", new
+        {
+            ingredientId = setup.IngredientId,
+            quantity = 3,
+            unitId = setup.UnitId
+        });
+
+        await EnsureSuccessAsync(duplicateResponse);
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var items = await context.ShoppingListItems
+            .Where(item => item.ShoppingListId == setup.ShoppingListId)
+            .ToListAsync();
+
+        Assert.Single(items);
+        Assert.Equal(5, items[0].Quantity);
+    }
+
+    [Fact]
+    public async Task User_CannotAddInvalidIngredientToShoppingList()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(client, email);
+        var setup = await CreateShoppingListSetupAsync(factory, email);
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsJsonAsync($"/api/shoppinglist/{setup.ShoppingListId}/items", new
+        {
+            ingredientId = 999999,
+            quantity = 1,
+            unitId = setup.UnitId
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UnauthenticatedUser_CannotAddShoppingListItem()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(client, email);
+        var setup = await CreateShoppingListSetupAsync(factory, email);
+
+        var response = await client.PostAsJsonAsync($"/api/shoppinglist/{setup.ShoppingListId}/items", new
+        {
+            ingredientId = setup.IngredientId,
+            quantity = 1,
+            unitId = setup.UnitId
+        });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task User_CanDeleteOwnShoppingListItem()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(client, email);
+        var setup = await CreateShoppingListSetupAsync(factory, email, createItem: true);
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.DeleteAsync($"/api/shoppinglist/items/{setup.ItemId}");
+
+        await EnsureSuccessAsync(response);
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        Assert.False(await context.ShoppingListItems.AnyAsync(item => item.Id == setup.ItemId));
+    }
+
+    [Fact]
+    public async Task User_CannotDeleteAnotherUsersShoppingListItem()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var firstEmail = CreateEmail();
+        var secondEmail = CreateEmail();
+
+        await RegisterUserAsync(client, firstEmail);
+        await RegisterUserAsync(client, secondEmail);
+        var otherSetup = await CreateShoppingListSetupAsync(factory, secondEmail, createItem: true);
+        var token = await LoginAndGetTokenAsync(client, firstEmail);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.DeleteAsync($"/api/shoppinglist/items/{otherSetup.ItemId}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        Assert.True(await context.ShoppingListItems.AnyAsync(item => item.Id == otherSetup.ItemId));
+    }
+
+    [Fact]
+    public async Task User_CanClearOwnShoppingList()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(client, email);
+        var setup = await CreateShoppingListSetupAsync(factory, email, createItem: true);
+        await AddShoppingListItemAsync(factory, setup.ShoppingListId, setup.IngredientId, setup.UnitId, 4);
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.DeleteAsync($"/api/shoppinglist/{setup.ShoppingListId}/items");
+
+        await EnsureSuccessAsync(response);
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        Assert.False(await context.ShoppingListItems.AnyAsync(item => item.ShoppingListId == setup.ShoppingListId));
+        Assert.True(await context.Ingredients.AnyAsync(ingredient => ingredient.Id == setup.IngredientId));
+    }
+
+    [Fact]
+    public async Task ClearingShoppingList_DoesNotAffectOtherUsers()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var firstEmail = CreateEmail();
+        var secondEmail = CreateEmail();
+
+        await RegisterUserAsync(client, firstEmail);
+        await RegisterUserAsync(client, secondEmail);
+        var ownSetup = await CreateShoppingListSetupAsync(factory, firstEmail, createItem: true);
+        var otherSetup = await CreateShoppingListSetupAsync(factory, secondEmail, createItem: true);
+        var token = await LoginAndGetTokenAsync(client, firstEmail);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.DeleteAsync($"/api/shoppinglist/{ownSetup.ShoppingListId}/items");
+
+        await EnsureSuccessAsync(response);
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        Assert.False(await context.ShoppingListItems.AnyAsync(item => item.ShoppingListId == ownSetup.ShoppingListId));
+        Assert.True(await context.ShoppingListItems.AnyAsync(item => item.ShoppingListId == otherSetup.ShoppingListId));
+    }
+
     private static async Task RegisterUserAsync(HttpClient client, string email)
     {
         var response = await client.PostAsJsonAsync("/api/auth/register", new
@@ -191,6 +369,88 @@ public class AuthAndAuthorizationTests
         return $"test.{Guid.NewGuid():N}@example.com";
     }
 
+    private static async Task<ShoppingListSetup> CreateShoppingListSetupAsync(
+        MealAppApiFactory factory,
+        string email,
+        bool createItem = false)
+    {
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var user = await userManager.FindByEmailAsync(email);
+
+        Assert.NotNull(user);
+
+        var ingredientCategory = new IngredientCategory
+        {
+            Name = $"Test Category {Guid.NewGuid():N}"
+        };
+        var ingredient = new Ingredient
+        {
+            Name = $"Test Ingredient {Guid.NewGuid():N}",
+            IngredientCategory = ingredientCategory
+        };
+        var unit = new Unit
+        {
+            Name = $"Test Unit {Guid.NewGuid():N}",
+            ShortName = "tu"
+        };
+        var shoppingList = new ShoppingList
+        {
+            UserId = user.Id,
+            Name = "Test Shopping List",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        context.IngredientCategories.Add(ingredientCategory);
+        context.Ingredients.Add(ingredient);
+        context.Units.Add(unit);
+        context.ShoppingLists.Add(shoppingList);
+        await context.SaveChangesAsync();
+
+        var itemId = 0;
+
+        if (createItem)
+        {
+            itemId = await AddShoppingListItemAsync(
+                factory,
+                shoppingList.Id,
+                ingredient.Id,
+                unit.Id,
+                2);
+        }
+
+        return new ShoppingListSetup(
+            shoppingList.Id,
+            ingredient.Id,
+            unit.Id,
+            itemId);
+    }
+
+    private static async Task<int> AddShoppingListItemAsync(
+        MealAppApiFactory factory,
+        int shoppingListId,
+        int ingredientId,
+        int unitId,
+        decimal quantity)
+    {
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var item = new ShoppingListItem
+        {
+            ShoppingListId = shoppingListId,
+            IngredientId = ingredientId,
+            UnitId = unitId,
+            Quantity = quantity,
+            IsChecked = false
+        };
+
+        context.ShoppingListItems.Add(item);
+        await context.SaveChangesAsync();
+
+        return item.Id;
+    }
+
     private static async Task EnsureSuccessAsync(HttpResponseMessage response)
     {
         if (response.IsSuccessStatusCode)
@@ -204,6 +464,12 @@ public class AuthAndAuthorizationTests
             $"Response status code does not indicate success: {(int)response.StatusCode} ({response.StatusCode}). Body: {body}");
     }
 }
+
+public record ShoppingListSetup(
+    int ShoppingListId,
+    int IngredientId,
+    int UnitId,
+    int ItemId);
 
 public class MealAppApiFactory : WebApplicationFactory<Program>
 {

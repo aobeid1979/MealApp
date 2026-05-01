@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -29,6 +30,18 @@ type ShoppingListGroup = {
   items: ShoppingListItem[];
 };
 
+type Ingredient = {
+  id: number;
+  name: string;
+  ingredientCategoryName: string | null;
+};
+
+type Unit = {
+  id: number;
+  name: string;
+  shortName: string;
+};
+
 type ApiResponse<T> = {
   isSuccess: boolean;
   result: T;
@@ -42,6 +55,8 @@ export default function ShoppingListPage() {
   const router = useRouter();
   const pathname = usePathname();
   const [shoppingLists, setShoppingLists] = useState<ShoppingList[]>([]);
+  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -53,6 +68,11 @@ export default function ShoppingListPage() {
   const [groupedShoppingListId, setGroupedShoppingListId] = useState<number | null>(null);
   const [groupedItems, setGroupedItems] = useState<ShoppingListGroup[]>([]);
   const [isLoadingGroupedItems, setIsLoadingGroupedItems] = useState(false);
+  const [addIngredientId, setAddIngredientId] = useState("");
+  const [addQuantity, setAddQuantity] = useState("");
+  const [addUnitId, setAddUnitId] = useState("");
+  const [isAddingItemToListId, setIsAddingItemToListId] = useState<number | null>(null);
+  const [isClearingListId, setIsClearingListId] = useState<number | null>(null);
 
   useEffect(() => {
     async function fetchShoppingLists() {
@@ -71,7 +91,15 @@ export default function ShoppingListPage() {
       }
 
       try {
-        setShoppingLists(await loadShoppingLists());
+        const [loadedShoppingLists, loadedIngredients, loadedUnits] = await Promise.all([
+          loadShoppingLists(),
+          loadIngredients(),
+          loadUnits()
+        ]);
+
+        setShoppingLists(loadedShoppingLists);
+        setIngredients(loadedIngredients);
+        setUnits(loadedUnits);
       } catch (error) {
         setErrorMessage(
           error instanceof Error
@@ -436,6 +464,96 @@ export default function ShoppingListPage() {
     }
   }
 
+  async function handleAddItem(shoppingListId: number) {
+    setMessage(null);
+    setIsAddingItemToListId(shoppingListId);
+
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error("Login token was not found.");
+      }
+
+      const response = await fetch(`${API_URL}/api/shoppinglist/${shoppingListId}/items`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token
+        },
+        body: JSON.stringify({
+          ingredientId: Number(addIngredientId),
+          quantity: Number(addQuantity),
+          unitId: Number(addUnitId)
+        })
+      });
+
+      const data = (await response.json()) as ApiResponse<ShoppingListItem>;
+
+      if (!data.isSuccess || !response.ok) {
+        throw new Error(data.errorMessages?.[0] ?? "Shopping list item could not be added.");
+      }
+
+      setAddIngredientId("");
+      setAddQuantity("");
+      setAddUnitId("");
+      await refreshShoppingLists();
+      setMessage("Shopping list item added.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Shopping list item could not be added."
+      );
+    } finally {
+      setIsAddingItemToListId(null);
+    }
+  }
+
+  async function handleClearListItems(shoppingListId: number) {
+    setMessage(null);
+
+    const confirmed = window.confirm("Clear all items from this shopping list?");
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsClearingListId(shoppingListId);
+
+    try {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error("Login token was not found.");
+      }
+
+      const response = await fetch(`${API_URL}/api/shoppinglist/${shoppingListId}/items`, {
+        method: "DELETE",
+        headers: {
+          Authorization: "Bearer " + token
+        }
+      });
+
+      const data = (await response.json()) as ApiResponse<unknown>;
+
+      if (!data.isSuccess || !response.ok) {
+        throw new Error(data.errorMessages?.[0] ?? "Shopping list could not be cleared.");
+      }
+
+      if (groupedShoppingListId === shoppingListId) {
+        setGroupedItems([]);
+      }
+
+      await refreshShoppingLists();
+      setMessage("Shopping list cleared.");
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Shopping list could not be cleared."
+      );
+    } finally {
+      setIsClearingListId(null);
+    }
+  }
+
   return (
     <section className="page-section">
       <div className="page-heading">
@@ -459,15 +577,11 @@ export default function ShoppingListPage() {
       )}
 
       {isLoading && (
-        <div className="status-panel">
-          Loading shopping lists...
-        </div>
+        <ShoppingListLoadingState />
       )}
 
       {!isLoading && !errorMessage && shoppingLists.length === 0 && (
-        <div className="status-panel">
-          No shopping lists yet.
-        </div>
+        <ShoppingListEmptyState />
       )}
 
       {!isLoading && !errorMessage && shoppingLists.length > 0 && (
@@ -523,6 +637,14 @@ export default function ShoppingListPage() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => handleClearListItems(shoppingList.id)}
+                    disabled={isClearingListId === shoppingList.id || shoppingList.items.length === 0}
+                    className="danger-button px-3 py-1 text-xs"
+                  >
+                    {isClearingListId === shoppingList.id ? "Clearing..." : "Clear Shopping List"}
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => handleDeleteList(shoppingList.id)}
                     className="danger-button px-3 py-1 text-xs"
                   >
@@ -555,6 +677,71 @@ export default function ShoppingListPage() {
                     </button>
                   </div>
                 )}
+              </div>
+
+              <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Add item
+                </h3>
+                <div className="mt-3 grid gap-3 md:grid-cols-[1.5fr_1fr_1fr_auto] md:items-end">
+                  <label className="form-label">
+                    Ingredient
+                    <select
+                      value={addIngredientId}
+                      onChange={(event) => setAddIngredientId(event.target.value)}
+                      className="form-input"
+                    >
+                      <option value="">Select ingredient</option>
+                      {ingredients.map((ingredient) => (
+                        <option key={ingredient.id} value={ingredient.id}>
+                          {ingredient.name}
+                          {ingredient.ingredientCategoryName
+                            ? ` (${ingredient.ingredientCategoryName})`
+                            : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="form-label">
+                    Quantity
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={addQuantity}
+                      onChange={(event) => setAddQuantity(event.target.value)}
+                      className="form-input"
+                    />
+                  </label>
+                  <label className="form-label">
+                    Unit
+                    <select
+                      value={addUnitId}
+                      onChange={(event) => setAddUnitId(event.target.value)}
+                      className="form-input"
+                    >
+                      <option value="">Select unit</option>
+                      {units.map((unit) => (
+                        <option key={unit.id} value={unit.id}>
+                          {unit.name} ({unit.shortName})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleAddItem(shoppingList.id)}
+                    disabled={
+                      isAddingItemToListId === shoppingList.id
+                      || !addIngredientId
+                      || !addQuantity
+                      || !addUnitId
+                    }
+                    className="primary-button"
+                  >
+                    {isAddingItemToListId === shoppingList.id ? "Adding..." : "Add"}
+                  </button>
+                </div>
               </div>
 
               {groupedShoppingListId === shoppingList.id && (
@@ -606,9 +793,7 @@ export default function ShoppingListPage() {
               )}
 
               {shoppingList.items.length === 0 ? (
-                <p className="mt-4 text-sm text-slate-600">
-                  No items in this shopping list.
-                </p>
+                <ShoppingListItemsEmptyState />
               ) : (
                 <ul className="mt-4 space-y-3">
                   {shoppingList.items.map((item) => (
@@ -706,6 +891,58 @@ export default function ShoppingListPage() {
   );
 }
 
+function ShoppingListLoadingState() {
+  return (
+    <div className="flex min-h-[45vh] items-center justify-center">
+      <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-emerald-100 border-t-emerald-600" />
+        <p className="mt-4 text-center text-sm font-medium text-slate-700">
+          Loading shopping lists...
+        </p>
+        <div className="mt-6 space-y-3">
+          <div className="h-4 animate-pulse rounded bg-slate-100" />
+          <div className="h-4 w-5/6 animate-pulse rounded bg-slate-100" />
+          <div className="h-4 w-2/3 animate-pulse rounded bg-slate-100" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ShoppingListEmptyState() {
+  return (
+    <div className="flex min-h-[35vh] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center">
+      <div className="max-w-md">
+        <h2 className="text-xl font-semibold text-slate-900">
+          No shopping lists yet.
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-slate-600">
+          Items appear here after you add meals to your meal plan and generate a shopping list.
+        </p>
+        <Link href="/meal-plan" className="primary-button mt-6 inline-flex">
+          Go to Meal Plan
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function ShoppingListItemsEmptyState() {
+  return (
+    <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center">
+      <h3 className="text-base font-semibold text-slate-900">
+        This shopping list has no items.
+      </h3>
+      <p className="mt-2 text-sm leading-6 text-slate-600">
+        Items appear after adding meals to your meal plan and generating a list with recipe ingredients.
+      </p>
+      <Link href="/meal-plan" className="secondary-button mt-5 inline-flex">
+        View Meal Plan
+      </Link>
+    </div>
+  );
+}
+
 async function loadShoppingLists() {
   const token = localStorage.getItem("token");
 
@@ -725,6 +962,28 @@ async function loadShoppingLists() {
     throw new Error(
       data.errorMessages?.[0] ?? "Shopping lists could not be loaded."
     );
+  }
+
+  return data.result;
+}
+
+async function loadIngredients() {
+  const response = await fetch(`${API_URL}/api/ingredient`);
+  const data = (await response.json()) as ApiResponse<Ingredient[]>;
+
+  if (!data.isSuccess || !response.ok) {
+    throw new Error(data.errorMessages?.[0] ?? "Ingredients could not be loaded.");
+  }
+
+  return data.result;
+}
+
+async function loadUnits() {
+  const response = await fetch(`${API_URL}/api/unit`);
+  const data = (await response.json()) as ApiResponse<Unit[]>;
+
+  if (!data.isSuccess || !response.ok) {
+    throw new Error(data.errorMessages?.[0] ?? "Units could not be loaded.");
   }
 
   return data.result;

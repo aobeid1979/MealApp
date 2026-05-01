@@ -20,7 +20,7 @@ body {
 
 @layer components {
   .page-section {
-    @apply mx-auto w-full space-y-8;
+    @apply mx-auto w-full max-w-6xl space-y-8;
   }
 
   .page-heading {
@@ -32,7 +32,7 @@ body {
   }
 
   .page-title {
-    @apply mt-2 text-3xl font-bold tracking-normal text-slate-950 sm:text-4xl;
+    @apply mt-2 text-2xl font-bold tracking-normal text-slate-950 sm:text-3xl;
   }
 
   .page-description {
@@ -48,15 +48,15 @@ body {
   }
 
   .primary-button {
-    @apply rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-800 hover:shadow disabled:cursor-not-allowed disabled:bg-slate-400 disabled:shadow-none;
+    @apply inline-flex items-center justify-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-emerald-800 hover:shadow-md active:translate-y-0 active:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:translate-y-0 disabled:cursor-not-allowed disabled:bg-slate-400 disabled:text-slate-100 disabled:shadow-none disabled:hover:bg-slate-400 disabled:hover:shadow-none;
   }
 
   .secondary-button {
-    @apply rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800;
+    @apply inline-flex items-center justify-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800 hover:shadow-md active:translate-y-0 active:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:translate-y-0 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none disabled:hover:bg-slate-100 disabled:hover:shadow-none;
   }
 
   .danger-button {
-    @apply rounded-md border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 shadow-sm transition hover:bg-red-50;
+    @apply inline-flex items-center justify-center rounded-md border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 shadow-sm transition hover:-translate-y-0.5 hover:border-red-300 hover:bg-red-50 hover:shadow-md active:translate-y-0 active:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:translate-y-0 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:shadow-none disabled:hover:bg-slate-100 disabled:hover:shadow-none;
   }
 
   .form-label {
