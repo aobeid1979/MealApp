@@ -3,6 +3,14 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import {
+  clearAuthSession,
+  getName,
+  getRole,
+  getTokenTimeRemaining,
+  getValidToken,
+  setRedirectPath
+} from "@/lib/auth";
 
 const publicLinks = [
   { href: "/", label: "Home" },
@@ -14,6 +22,8 @@ const protectedLinks = [
   { href: "/shopping-list", label: "Shopping List" }
 ];
 
+const protectedPaths = ["/admin", "/meal-plan", "/shopping-list", "/profile"];
+
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
@@ -22,18 +32,35 @@ export default function Header() {
   const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
-    // localStorage is only available in the browser, so the header syncs after navigation.
+    const token = getValidToken();
+
+    // Auth storage is only available in the browser, so the header syncs after navigation.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsLoggedIn(Boolean(localStorage.getItem("token")));
-    setUserName(localStorage.getItem("name"));
-    setUserRole(localStorage.getItem("role"));
-  }, [pathname]);
+    setIsLoggedIn(Boolean(token));
+    setUserName(getName());
+    setUserRole(getRole());
+
+    if (!token) {
+      return;
+    }
+
+    const logoutTimer = window.setTimeout(() => {
+      clearAuthSession();
+      setIsLoggedIn(false);
+      setUserName(null);
+      setUserRole(null);
+
+      if (protectedPaths.some((protectedPath) => pathname.startsWith(protectedPath))) {
+        setRedirectPath(pathname);
+        router.push("/login");
+      }
+    }, getTokenTimeRemaining(token));
+
+    return () => window.clearTimeout(logoutTimer);
+  }, [pathname, router]);
 
   function handleLogout() {
-    localStorage.removeItem("token");
-    localStorage.removeItem("email");
-    localStorage.removeItem("name");
-    localStorage.removeItem("role");
+    clearAuthSession();
     setIsLoggedIn(false);
     setUserName(null);
     setUserRole(null);

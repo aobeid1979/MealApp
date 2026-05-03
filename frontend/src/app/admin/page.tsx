@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { getRole, getValidToken, setRedirectPath } from "@/lib/auth";
 
 type Category = {
   id: number;
@@ -144,11 +145,11 @@ export default function AdminPage() {
   const [isSubmittingRecipeTool, setIsSubmittingRecipeTool] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const role = localStorage.getItem("role");
+    const token = getValidToken();
+    const role = getRole();
 
     if (!token) {
-      localStorage.setItem("redirectPath", pathname);
+      setRedirectPath(pathname);
       router.push("/login");
       return;
     }
@@ -158,7 +159,7 @@ export default function AdminPage() {
       return;
     }
 
-    // localStorage is only available in the browser, so access is checked after mount.
+    // Auth storage is only available in the browser, so access is checked after mount.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsCheckingAccess(false);
     loadCategories();
@@ -361,7 +362,7 @@ export default function AdminPage() {
     setIsSubmitting(true);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -406,7 +407,7 @@ export default function AdminPage() {
     setErrorMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -441,7 +442,7 @@ export default function AdminPage() {
     setIsSubmittingIngredientCategory(true);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -496,7 +497,7 @@ export default function AdminPage() {
     setErrorMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -538,7 +539,7 @@ export default function AdminPage() {
     setIsSubmittingIngredient(true);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -585,7 +586,7 @@ export default function AdminPage() {
     setErrorMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -620,7 +621,7 @@ export default function AdminPage() {
     setIsSubmittingUnit(true);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -665,7 +666,7 @@ export default function AdminPage() {
     setErrorMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -700,7 +701,7 @@ export default function AdminPage() {
     setIsSubmittingRecipe(true);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -747,7 +748,7 @@ export default function AdminPage() {
     setErrorMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -812,7 +813,7 @@ export default function AdminPage() {
     setIsSubmittingRecipeIngredient(true);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -864,7 +865,7 @@ export default function AdminPage() {
     setErrorMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -918,7 +919,7 @@ export default function AdminPage() {
     setIsSubmittingRecipeStep(true);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -969,7 +970,7 @@ export default function AdminPage() {
     setErrorMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -1019,7 +1020,7 @@ export default function AdminPage() {
     setIsSubmittingRecipeTool(true);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -1069,7 +1070,7 @@ export default function AdminPage() {
     setErrorMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -1307,14 +1308,14 @@ export default function AdminPage() {
           )}
 
           {!isLoadingCategories && categories.length > 0 && (
-            <div className="mt-5 space-y-3">
+            <div className="admin-list-scroll">
               {categories.map((category) => (
                 <article
                   key={category.id}
-                  className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+                  className="admin-list-item"
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
+                    <div className="min-w-0">
                       <h3 className="font-semibold text-slate-950">
                         {category.name}
                       </h3>
@@ -1323,18 +1324,18 @@ export default function AdminPage() {
                       </p>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="admin-list-actions">
                       <button
                         type="button"
                         onClick={() => startEditing(category)}
-                        className="secondary-button px-3 py-1 text-xs"
+                        className="secondary-button admin-list-button"
                       >
                         Update
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDelete(category.id)}
-                        className="danger-button px-3 py-1 text-xs"
+                        className="danger-button admin-list-button"
                       >
                         Delete
                       </button>
@@ -1456,14 +1457,14 @@ export default function AdminPage() {
           )}
 
           {!isLoadingIngredients && ingredients.length > 0 && (
-            <div className="mt-5 space-y-3">
+            <div className="admin-list-scroll">
               {ingredients.map((ingredient) => (
                 <article
                   key={ingredient.id}
-                  className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+                  className="admin-list-item"
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
+                    <div className="min-w-0">
                       <h3 className="font-semibold text-slate-950">
                         {ingredient.name}
                       </h3>
@@ -1475,18 +1476,18 @@ export default function AdminPage() {
                       </p>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="admin-list-actions">
                       <button
                         type="button"
                         onClick={() => startEditingIngredient(ingredient)}
-                        className="secondary-button px-3 py-1 text-xs"
+                        className="secondary-button admin-list-button"
                       >
                         Update
                       </button>
                       <button
                         type="button"
                         onClick={() => handleIngredientDelete(ingredient.id)}
-                        className="danger-button px-3 py-1 text-xs"
+                        className="danger-button admin-list-button"
                       >
                         Delete
                       </button>
@@ -1587,14 +1588,14 @@ export default function AdminPage() {
           )}
 
           {!isLoadingIngredientCategories && ingredientCategories.length > 0 && (
-            <div className="mt-5 space-y-3">
+            <div className="admin-list-scroll">
               {ingredientCategories.map((ingredientCategory) => (
                 <article
                   key={ingredientCategory.id}
-                  className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+                  className="admin-list-item"
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
+                    <div className="min-w-0">
                       <h3 className="font-semibold text-slate-950">
                         {ingredientCategory.name}
                       </h3>
@@ -1603,13 +1604,13 @@ export default function AdminPage() {
                       </p>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="admin-list-actions">
                       <button
                         type="button"
                         onClick={() =>
                           startEditingIngredientCategory(ingredientCategory)
                         }
-                        className="secondary-button px-3 py-1 text-xs"
+                        className="secondary-button admin-list-button"
                       >
                         Update
                       </button>
@@ -1618,7 +1619,7 @@ export default function AdminPage() {
                         onClick={() =>
                           handleIngredientCategoryDelete(ingredientCategory.id)
                         }
-                        className="danger-button px-3 py-1 text-xs"
+                        className="danger-button admin-list-button"
                       >
                         Delete
                       </button>
@@ -1708,14 +1709,14 @@ export default function AdminPage() {
           )}
 
           {!isLoadingUnits && units.length > 0 && (
-            <div className="mt-5 space-y-3">
+            <div className="admin-list-scroll">
               {units.map((unit) => (
                 <article
                   key={unit.id}
-                  className="rounded-lg border border-slate-200 bg-slate-50 p-4"
+                  className="admin-list-item"
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
+                    <div className="min-w-0">
                       <h3 className="font-semibold text-slate-950">
                         {unit.name}
                       </h3>
@@ -1724,18 +1725,18 @@ export default function AdminPage() {
                       </p>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="admin-list-actions">
                       <button
                         type="button"
                         onClick={() => startEditingUnit(unit)}
-                        className="secondary-button px-3 py-1 text-xs"
+                        className="secondary-button admin-list-button"
                       >
                         Update
                       </button>
                       <button
                         type="button"
                         onClick={() => handleUnitDelete(unit.id)}
-                        className="danger-button px-3 py-1 text-xs"
+                        className="danger-button admin-list-button"
                       >
                         Delete
                       </button>

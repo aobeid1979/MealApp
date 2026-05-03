@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
+import { getValidToken, setRedirectPath } from "@/lib/auth";
 
 type RecipeDetails = {
   id: number;
@@ -158,10 +159,10 @@ export default function RecipeDetailsPage() {
     setIsAddingToMealPlan(true);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
-        localStorage.setItem("redirectPath", pathname);
+        setRedirectPath(pathname);
         router.push("/login");
         return;
       }
@@ -209,10 +210,10 @@ export default function RecipeDetailsPage() {
     setIsAddingFavorite(true);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
-        localStorage.setItem("redirectPath", pathname);
+        setRedirectPath(pathname);
         router.push("/login");
         return;
       }

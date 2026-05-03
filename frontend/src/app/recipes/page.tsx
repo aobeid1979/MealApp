@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { getValidToken, setRedirectPath } from "@/lib/auth";
 
 type Recipe = {
   id: number;
@@ -60,10 +61,10 @@ export default function RecipesPage() {
     setMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
-        localStorage.setItem("redirectPath", pathname);
+        setRedirectPath(pathname);
         router.push("/login");
         return;
       }

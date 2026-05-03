@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { getRole, getValidToken, setRedirectPath } from "@/lib/auth";
 
 type ShoppingList = {
   id: number;
@@ -76,11 +77,11 @@ export default function ShoppingListPage() {
 
   useEffect(() => {
     async function fetchShoppingLists() {
-      const token = localStorage.getItem("token");
-      const role = localStorage.getItem("role");
+      const token = getValidToken();
+      const role = getRole();
 
       if (!token) {
-        localStorage.setItem("redirectPath", pathname);
+        setRedirectPath(pathname);
         router.push("/login");
         return;
       }
@@ -118,7 +119,7 @@ export default function ShoppingListPage() {
     setMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -174,7 +175,7 @@ export default function ShoppingListPage() {
     setMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -221,7 +222,7 @@ export default function ShoppingListPage() {
     setMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -261,7 +262,7 @@ export default function ShoppingListPage() {
     setIsLoadingGroupedItems(true);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -307,7 +308,7 @@ export default function ShoppingListPage() {
     setMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -348,7 +349,7 @@ export default function ShoppingListPage() {
     setMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -388,7 +389,7 @@ export default function ShoppingListPage() {
     setMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -425,7 +426,7 @@ export default function ShoppingListPage() {
     setMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -469,7 +470,7 @@ export default function ShoppingListPage() {
     setIsAddingItemToListId(shoppingListId);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -520,7 +521,7 @@ export default function ShoppingListPage() {
     setIsClearingListId(shoppingListId);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -944,7 +945,7 @@ function ShoppingListItemsEmptyState() {
 }
 
 async function loadShoppingLists() {
-  const token = localStorage.getItem("token");
+  const token = getValidToken();
 
   if (!token) {
     throw new Error("Login token was not found.");

@@ -2,6 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import {
+  clearRedirectPath,
+  getRedirectPath,
+  saveAuthSession
+} from "@/lib/auth";
 
 type LoginResult = {
   message: string;
@@ -50,13 +55,15 @@ export default function LoginPage() {
         throw new Error(data.errorMessages?.[0] ?? "Login failed.");
       }
 
-      localStorage.setItem("token", data.result.token);
-      localStorage.setItem("email", data.result.email);
-      localStorage.setItem("name", data.result.name);
-      localStorage.setItem("role", data.result.role ?? "");
+      saveAuthSession({
+        token: data.result.token,
+        email: data.result.email,
+        name: data.result.name,
+        role: data.result.role ?? ""
+      });
 
-      const redirectPath = localStorage.getItem("redirectPath");
-      localStorage.removeItem("redirectPath");
+      const redirectPath = getRedirectPath();
+      clearRedirectPath();
 
       if (redirectPath) {
         router.push(redirectPath);

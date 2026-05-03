@@ -3,6 +3,13 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import {
+  getEmail,
+  getName,
+  getRole,
+  getValidToken,
+  setRedirectPath
+} from "@/lib/auth";
 
 type ProfileInfo = {
   name: string;
@@ -68,11 +75,11 @@ export default function ProfilePage() {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const role = localStorage.getItem("role");
+    const token = getValidToken();
+    const role = getRole();
 
     if (!token) {
-      localStorage.setItem("redirectPath", pathname);
+      setRedirectPath(pathname);
       router.push("/login");
       return;
     }
@@ -84,12 +91,12 @@ export default function ProfilePage() {
 
     const authToken = token;
 
-    // localStorage is available only after the page mounts in the browser.
+    // Auth storage is available only after the page mounts in the browser.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setProfile({
-      name: localStorage.getItem("name") ?? "",
-      email: localStorage.getItem("email") ?? "",
-      role: localStorage.getItem("role") ?? ""
+      name: getName() ?? "",
+      email: getEmail() ?? "",
+      role: getRole() ?? ""
     });
 
     async function fetchProfileData() {
@@ -120,10 +127,10 @@ export default function ProfilePage() {
     setMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
-        localStorage.setItem("redirectPath", pathname);
+        setRedirectPath(pathname);
         router.push("/login");
         return;
       }

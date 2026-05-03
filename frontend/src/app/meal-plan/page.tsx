@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { getRole, getValidToken, setRedirectPath } from "@/lib/auth";
 
 type MealPlanItem = {
   id: number;
@@ -38,11 +39,11 @@ export default function MealPlanPage() {
 
   useEffect(() => {
     async function fetchMealPlans() {
-      const token = localStorage.getItem("token");
-      const role = localStorage.getItem("role");
+      const token = getValidToken();
+      const role = getRole();
 
       if (!token) {
-        localStorage.setItem("redirectPath", pathname);
+        setRedirectPath(pathname);
         router.push("/login");
         return;
       }
@@ -84,7 +85,7 @@ export default function MealPlanPage() {
     setMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -117,7 +118,7 @@ export default function MealPlanPage() {
   }
 
   async function refreshMealPlans() {
-    const token = localStorage.getItem("token");
+    const token = getValidToken();
 
     if (!token) {
       throw new Error("Login token was not found.");
@@ -144,7 +145,7 @@ export default function MealPlanPage() {
     setIsLoading(true);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -180,7 +181,7 @@ export default function MealPlanPage() {
     setMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -222,7 +223,7 @@ export default function MealPlanPage() {
     setMessage(null);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
@@ -271,7 +272,7 @@ export default function MealPlanPage() {
     setIsGenerating(true);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = getValidToken();
 
       if (!token) {
         throw new Error("Login token was not found.");
