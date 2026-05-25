@@ -6,6 +6,9 @@ import { FormEvent, useState } from "react";
 type RegisterResult = {
   message: string;
   email: string;
+  firstName: string;
+  lastName: string;
+  name: string;
   role: string;
 };
 
@@ -20,9 +23,11 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [isError, setIsError] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -34,13 +39,22 @@ export default function RegisterPage() {
     setIsSubmitting(true);
 
     try {
+      validateRegisterForm({
+        firstName,
+        lastName,
+        email,
+        password,
+        confirmPassword
+      });
+
       const response = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          name,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
           email,
           password
         })
@@ -52,10 +66,10 @@ export default function RegisterPage() {
         throw new Error(data.errorMessages?.[0] ?? "Registration failed.");
       }
 
-      setMessage("Registration successful. Redirecting to login...");
+      setMessage("Registration successful. You can now log in.");
       setTimeout(() => {
         router.push("/login");
-      }, 1000);
+      }, 2500);
     } catch (error) {
       setIsError(true);
       setMessage(
@@ -76,14 +90,28 @@ export default function RegisterPage() {
 
       <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
         <div>
-          <label className="form-label" htmlFor="name">
-            Name
+          <label className="form-label" htmlFor="first-name">
+            First name
           </label>
           <input
-            id="name"
+            id="first-name"
             type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
+            value={firstName}
+            onChange={(event) => setFirstName(event.target.value)}
+            required
+            className="form-input"
+          />
+        </div>
+
+        <div>
+          <label className="form-label" htmlFor="last-name">
+            Last name
+          </label>
+          <input
+            id="last-name"
+            type="text"
+            value={lastName}
+            onChange={(event) => setLastName(event.target.value)}
             required
             className="form-input"
           />
@@ -117,6 +145,20 @@ export default function RegisterPage() {
           />
         </div>
 
+        <div>
+          <label className="form-label" htmlFor="confirm-password">
+            Confirm password
+          </label>
+          <input
+            id="confirm-password"
+            type="password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            required
+            className="form-input"
+          />
+        </div>
+
         <button
           type="submit"
           disabled={isSubmitting}
@@ -139,4 +181,38 @@ export default function RegisterPage() {
       )}
     </section>
   );
+}
+
+function validateRegisterForm({
+  firstName,
+  lastName,
+  email,
+  password,
+  confirmPassword
+}: {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+}) {
+  if (!firstName.trim()) {
+    throw new Error("First name is required.");
+  }
+
+  if (!lastName.trim()) {
+    throw new Error("Last name is required.");
+  }
+
+  if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error("Enter a valid email address.");
+  }
+
+  if (!password) {
+    throw new Error("Password is required.");
+  }
+
+  if (password !== confirmPassword) {
+    throw new Error("Confirm password must match password.");
+  }
 }

@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using MealApp.Data;
 using MealApp.Models;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -28,7 +29,8 @@ public class AuthAndAuthorizationTests
 
         var response = await client.PostAsJsonAsync("/api/auth/register", new
         {
-            name = "Test User",
+            firstName = "Test",
+            lastName = "User",
             email,
             password = "Pass123$",
             role = "Admin"
@@ -41,8 +43,58 @@ public class AuthAndAuthorizationTests
         var user = await userManager.FindByEmailAsync(email);
 
         Assert.NotNull(user);
+        Assert.True(user.EmailConfirmed);
         Assert.True(await userManager.IsInRoleAsync(user, "User"));
         Assert.False(await userManager.IsInRoleAsync(user, "Admin"));
+    }
+
+    [Fact]
+    public async Task Register_DuplicateEmail_ReturnsClearBadRequest()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(factory, client, email);
+
+        var response = await client.PostAsJsonAsync("/api/auth/register", new
+        {
+            firstName = "Another",
+            lastName = "User",
+            email,
+            password = "Pass123$"
+        });
+
+        var content = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("Email is already registered.", content);
+    }
+
+    [Fact]
+    public async Task Register_AllowsImmediateLoginWhileEmailVerificationIsDisabled()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        var registerResponse = await client.PostAsJsonAsync("/api/auth/register", new
+        {
+            firstName = "Test",
+            lastName = "User",
+            email,
+            password = "Pass123$"
+        });
+
+        await EnsureSuccessAsync(registerResponse);
+
+        var response = await client.PostAsJsonAsync("/api/auth/login", new
+        {
+            email,
+            password = "Pass123$"
+        });
+
+        await EnsureSuccessAsync(response);
     }
 
     [Fact]
@@ -52,7 +104,7 @@ public class AuthAndAuthorizationTests
         var client = factory.CreateClient();
         var email = CreateEmail();
 
-        await RegisterUserAsync(client, email);
+        await RegisterUserAsync(factory, client, email);
 
         var response = await client.PostAsJsonAsync("/api/auth/login", new
         {
@@ -76,7 +128,7 @@ public class AuthAndAuthorizationTests
         var client = factory.CreateClient();
         var email = CreateEmail();
 
-        await RegisterUserAsync(client, email);
+        await RegisterUserAsync(factory, client, email);
         var token = await LoginAndGetTokenAsync(client, email);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
@@ -135,7 +187,7 @@ public class AuthAndAuthorizationTests
         var client = factory.CreateClient();
         var email = CreateEmail();
 
-        await RegisterUserAsync(client, email);
+        await RegisterUserAsync(factory, client, email);
         var setup = await CreateShoppingListSetupAsync(factory, email);
         var token = await LoginAndGetTokenAsync(client, email);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -169,13 +221,66 @@ public class AuthAndAuthorizationTests
     }
 
     [Fact]
+    public async Task GenerateShoppingList_MergesDuplicateIngredientAndUnit()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(factory, client, email);
+        var setup = await CreateMealPlanShoppingListMergeSetupAsync(factory, email);
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsync("/api/shoppinglist/generate", null);
+
+        await EnsureSuccessAsync(response);
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var items = await context.ShoppingListItems
+            .Where(item => item.ShoppingListId == setup.ShoppingListId)
+            .ToListAsync();
+
+        var mergedItem = Assert.Single(items);
+        Assert.Equal(setup.IngredientId, mergedItem.IngredientId);
+        Assert.Equal(setup.UnitId, mergedItem.UnitId);
+        Assert.Equal(5, mergedItem.Quantity);
+        Assert.True(mergedItem.IsChecked);
+    }
+
+    [Fact]
+    public async Task GetMyShoppingLists_ReturnsOnlyActiveShoppingList()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(factory, client, email);
+        var firstSetup = await CreateShoppingListSetupAsync(factory, email);
+        await CreateShoppingListSetupAsync(factory, email);
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.GetAsync("/api/shoppinglist/my");
+
+        await EnsureSuccessAsync(response);
+
+        using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        var lists = json.RootElement.GetProperty("result").EnumerateArray().ToList();
+
+        var list = Assert.Single(lists);
+        Assert.Equal(firstSetup.ShoppingListId, list.GetProperty("id").GetInt32());
+    }
+
+    [Fact]
     public async Task User_CannotAddInvalidIngredientToShoppingList()
     {
         await using var factory = new MealAppApiFactory();
         var client = factory.CreateClient();
         var email = CreateEmail();
 
-        await RegisterUserAsync(client, email);
+        await RegisterUserAsync(factory, client, email);
         var setup = await CreateShoppingListSetupAsync(factory, email);
         var token = await LoginAndGetTokenAsync(client, email);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -197,7 +302,7 @@ public class AuthAndAuthorizationTests
         var client = factory.CreateClient();
         var email = CreateEmail();
 
-        await RegisterUserAsync(client, email);
+        await RegisterUserAsync(factory, client, email);
         var setup = await CreateShoppingListSetupAsync(factory, email);
 
         var response = await client.PostAsJsonAsync($"/api/shoppinglist/{setup.ShoppingListId}/items", new
@@ -217,7 +322,7 @@ public class AuthAndAuthorizationTests
         var client = factory.CreateClient();
         var email = CreateEmail();
 
-        await RegisterUserAsync(client, email);
+        await RegisterUserAsync(factory, client, email);
         var setup = await CreateShoppingListSetupAsync(factory, email, createItem: true);
         var token = await LoginAndGetTokenAsync(client, email);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -240,8 +345,8 @@ public class AuthAndAuthorizationTests
         var firstEmail = CreateEmail();
         var secondEmail = CreateEmail();
 
-        await RegisterUserAsync(client, firstEmail);
-        await RegisterUserAsync(client, secondEmail);
+        await RegisterUserAsync(factory, client, firstEmail);
+        await RegisterUserAsync(factory, client, secondEmail);
         var otherSetup = await CreateShoppingListSetupAsync(factory, secondEmail, createItem: true);
         var token = await LoginAndGetTokenAsync(client, firstEmail);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -263,7 +368,7 @@ public class AuthAndAuthorizationTests
         var client = factory.CreateClient();
         var email = CreateEmail();
 
-        await RegisterUserAsync(client, email);
+        await RegisterUserAsync(factory, client, email);
         var setup = await CreateShoppingListSetupAsync(factory, email, createItem: true);
         await AddShoppingListItemAsync(factory, setup.ShoppingListId, setup.IngredientId, setup.UnitId, 4);
         var token = await LoginAndGetTokenAsync(client, email);
@@ -288,8 +393,8 @@ public class AuthAndAuthorizationTests
         var firstEmail = CreateEmail();
         var secondEmail = CreateEmail();
 
-        await RegisterUserAsync(client, firstEmail);
-        await RegisterUserAsync(client, secondEmail);
+        await RegisterUserAsync(factory, client, firstEmail);
+        await RegisterUserAsync(factory, client, secondEmail);
         var ownSetup = await CreateShoppingListSetupAsync(factory, firstEmail, createItem: true);
         var otherSetup = await CreateShoppingListSetupAsync(factory, secondEmail, createItem: true);
         var token = await LoginAndGetTokenAsync(client, firstEmail);
@@ -306,16 +411,38 @@ public class AuthAndAuthorizationTests
         Assert.True(await context.ShoppingListItems.AnyAsync(item => item.ShoppingListId == otherSetup.ShoppingListId));
     }
 
-    private static async Task RegisterUserAsync(HttpClient client, string email)
+    private static async Task RegisterUserAsync(MealAppApiFactory factory, HttpClient client, string email)
     {
         var response = await client.PostAsJsonAsync("/api/auth/register", new
         {
-            name = "Test User",
+            firstName = "Test",
+            lastName = "User",
             email,
             password = "Pass123$"
         });
 
         await EnsureSuccessAsync(response);
+
+        await ConfirmUserEmailAsync(factory, email);
+    }
+
+    private static async Task ConfirmUserEmailAsync(MealAppApiFactory factory, string email)
+    {
+        using var scope = factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var user = await userManager.FindByEmailAsync(email);
+
+        Assert.NotNull(user);
+
+        if (user.EmailConfirmed)
+        {
+            return;
+        }
+
+        var token = await userManager.GenerateEmailConfirmationTokenAsync(user);
+        var result = await userManager.ConfirmEmailAsync(user, token);
+
+        Assert.True(result.Succeeded);
     }
 
     private static async Task<string> LoginAndGetTokenAsync(HttpClient client, string email)
@@ -351,6 +478,8 @@ public class AuthAndAuthorizationTests
         {
             UserName = email,
             Email = email,
+            FirstName = "Test",
+            LastName = "Admin",
             Name = "Test Admin",
             EmailConfirmed = true
         };
@@ -425,6 +554,86 @@ public class AuthAndAuthorizationTests
             ingredient.Id,
             unit.Id,
             itemId);
+    }
+
+    private static async Task<ShoppingListSetup> CreateMealPlanShoppingListMergeSetupAsync(
+        MealAppApiFactory factory,
+        string email)
+    {
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var user = await userManager.FindByEmailAsync(email);
+
+        Assert.NotNull(user);
+
+        var category = new Category
+        {
+            Name = $"Test Recipe Category {Guid.NewGuid():N}"
+        };
+        var ingredientCategory = new IngredientCategory
+        {
+            Name = $"Test Ingredient Category {Guid.NewGuid():N}"
+        };
+        var ingredient = new Ingredient
+        {
+            Name = $"Test Ingredient {Guid.NewGuid():N}",
+            IngredientCategory = ingredientCategory
+        };
+        var unit = new Unit
+        {
+            Name = $"Test Unit {Guid.NewGuid():N}",
+            ShortName = "tu"
+        };
+        var recipe = new Recipe
+        {
+            Title = $"Test Recipe {Guid.NewGuid():N}",
+            Servings = 4,
+            Category = category,
+            RecipeIngredients =
+            [
+                new RecipeIngredient
+                {
+                    Ingredient = ingredient,
+                    Unit = unit,
+                    Quantity = 6
+                }
+            ]
+        };
+        var mealPlan = new MealPlan
+        {
+            UserId = user.Id,
+            Recipe = recipe,
+            Servings = 2,
+            PlannedDate = DateTime.UtcNow.Date,
+            CreatedAt = DateTime.UtcNow
+        };
+        var shoppingList = new ShoppingList
+        {
+            UserId = user.Id,
+            Name = "Test Shopping List",
+            CreatedAt = DateTime.UtcNow,
+            Items =
+            [
+                new ShoppingListItem
+                {
+                    Ingredient = ingredient,
+                    Unit = unit,
+                    Quantity = 2,
+                    IsChecked = true
+                }
+            ]
+        };
+
+        context.MealPlans.Add(mealPlan);
+        context.ShoppingLists.Add(shoppingList);
+        await context.SaveChangesAsync();
+
+        return new ShoppingListSetup(
+            shoppingList.Id,
+            ingredient.Id,
+            unit.Id,
+            shoppingList.Items.First().Id);
     }
 
     private static async Task<int> AddShoppingListItemAsync(
@@ -512,6 +721,10 @@ public class MealAppApiFactory : WebApplicationFactory<Program>
             {
                 options.UseInMemoryDatabase(_databaseName);
             });
+
+            services.AddDataProtection()
+                .PersistKeysToFileSystem(new DirectoryInfo(
+                    Path.Combine(AppContext.BaseDirectory, "data-protection-keys", _databaseName)));
         });
     }
 

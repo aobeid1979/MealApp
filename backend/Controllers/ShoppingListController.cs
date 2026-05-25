@@ -71,15 +71,9 @@ public class ShoppingListController : ApiControllerBase
             });
         }
 
-        var shoppingList = new ShoppingList
-        {
-            UserId = userId,
-            Name = GetDefaultShoppingListName(),
-            CreatedAt = DateTime.UtcNow,
-            Items = mergedItems
-        };
+        var shoppingList = await GetOrCreateShoppingList(userId);
 
-        _context.ShoppingLists.Add(shoppingList);
+        await AddOrMergeShoppingListItems(shoppingList.Id, userId, mergedItems);
         await _context.SaveChangesAsync();
 
         var response = await GetShoppingListResponseDto(shoppingList.Id, userId);
@@ -145,17 +139,13 @@ public class ShoppingListController : ApiControllerBase
             });
         }
 
-        var shoppingList = new ShoppingList
-        {
-            UserId = userId,
-            Name = !string.IsNullOrWhiteSpace(shoppingListName)
+        var shoppingList = await GetOrCreateShoppingList(
+            userId,
+            !string.IsNullOrWhiteSpace(shoppingListName)
                 ? shoppingListName
-                : GetDefaultShoppingListName(),
-            CreatedAt = DateTime.UtcNow,
-            Items = mergedItems
-        };
+                : null);
 
-        _context.ShoppingLists.Add(shoppingList);
+        await AddOrMergeShoppingListItems(shoppingList.Id, userId, mergedItems);
         await _context.SaveChangesAsync();
 
         var response = await GetShoppingListResponseDto(shoppingList.Id, userId);
@@ -173,9 +163,11 @@ public class ShoppingListController : ApiControllerBase
             return Unauthorized();
         }
 
+        var activeShoppingListId = await GetActiveShoppingListId(userId);
+
         var shoppingLists = await _context.ShoppingLists
-            .Where(shoppingList => shoppingList.UserId == userId)
-            .OrderByDescending(shoppingList => shoppingList.CreatedAt)
+            .Where(shoppingList => shoppingList.Id == activeShoppingListId
+                && shoppingList.UserId == userId)
             .Select(shoppingList => new ShoppingListResponseDto
             {
                 Id = shoppingList.Id,
@@ -722,6 +714,69 @@ public class ShoppingListController : ApiControllerBase
     private static string GetDefaultShoppingListName()
     {
         return $"Shopping List {DateTime.UtcNow:yyyy-MM-dd HH:mm}";
+    }
+
+    private async Task<ShoppingList> GetOrCreateShoppingList(string userId, string? name = null)
+    {
+        var shoppingList = await _context.ShoppingLists
+            .Where(shoppingList => shoppingList.UserId == userId)
+            .OrderBy(shoppingList => shoppingList.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        if (shoppingList is not null)
+        {
+            return shoppingList;
+        }
+
+        shoppingList = new ShoppingList
+        {
+            UserId = userId,
+            Name = name ?? GetDefaultShoppingListName(),
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.ShoppingLists.Add(shoppingList);
+        await _context.SaveChangesAsync();
+
+        return shoppingList;
+    }
+
+    private async Task<int?> GetActiveShoppingListId(string userId)
+    {
+        return await _context.ShoppingLists
+            .Where(shoppingList => shoppingList.UserId == userId)
+            .OrderBy(shoppingList => shoppingList.CreatedAt)
+            .Select(shoppingList => (int?)shoppingList.Id)
+            .FirstOrDefaultAsync();
+    }
+
+    private async Task AddOrMergeShoppingListItems(
+        int shoppingListId,
+        string userId,
+        List<ShoppingListItem> items)
+    {
+        var existingItems = await _context.ShoppingListItems
+            .Where(item => item.ShoppingListId == shoppingListId
+                && item.ShoppingList != null
+                && item.ShoppingList.UserId == userId)
+            .ToListAsync();
+
+        foreach (var item in items)
+        {
+            var existingItem = existingItems.FirstOrDefault(existingItem =>
+                existingItem.IngredientId == item.IngredientId
+                && existingItem.UnitId == item.UnitId);
+
+            if (existingItem is not null)
+            {
+                existingItem.Quantity += item.Quantity;
+                continue;
+            }
+
+            item.ShoppingListId = shoppingListId;
+            _context.ShoppingListItems.Add(item);
+            existingItems.Add(item);
+        }
     }
 
     private static List<ShoppingListItem> BuildMergedShoppingListItems(List<MealPlan> mealPlans)

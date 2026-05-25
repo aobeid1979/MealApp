@@ -5,7 +5,8 @@ namespace MealApp.Data;
 
 public static class AdminSeeder
 {
-    private const string AdminName = "Ammar";
+    private const string AdminFirstName = "Ammar";
+    private const string AdminLastName = "Admin";
     private const string AdminRole = "Admin";
 
     public static async Task SeedDefaultAdminAsync(IServiceProvider serviceProvider)
@@ -39,7 +40,9 @@ public static class AdminSeeder
             {
                 UserName = email,
                 Email = email,
-                Name = AdminName,
+                FirstName = AdminFirstName,
+                LastName = AdminLastName,
+                Name = $"{AdminFirstName} {AdminLastName}",
                 EmailConfirmed = true
             };
 

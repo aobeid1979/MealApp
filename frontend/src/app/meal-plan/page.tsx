@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getRole, getValidToken, setRedirectPath } from "@/lib/auth";
@@ -31,6 +32,7 @@ export default function MealPlanPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [wasShoppingListGenerated, setWasShoppingListGenerated] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [editingMealPlanId, setEditingMealPlanId] = useState<number | null>(null);
@@ -269,6 +271,7 @@ export default function MealPlanPage() {
 
   async function handleGenerateShoppingList() {
     setMessage(null);
+    setWasShoppingListGenerated(false);
     setIsGenerating(true);
 
     try {
@@ -292,6 +295,7 @@ export default function MealPlanPage() {
       }
 
       setMessage("Shopping list generated successfully.");
+      setWasShoppingListGenerated(true);
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -325,14 +329,21 @@ export default function MealPlanPage() {
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={handleGenerateShoppingList}
-        disabled={isGenerating}
-        className="primary-button w-fit"
-      >
-        {isGenerating ? "Generating..." : "Generate Shopping List"}
-      </button>
+      <div className="flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={handleGenerateShoppingList}
+          disabled={isGenerating}
+          className="primary-button w-fit"
+        >
+          {isGenerating ? "Generating..." : "Generate Shopping List"}
+        </button>
+        {wasShoppingListGenerated && (
+          <Link href="/shopping-list" className="secondary-button">
+            Go to Shopping List
+          </Link>
+        )}
+      </div>
 
       <div className="app-card p-5">
         <h2 className="text-lg font-semibold tracking-normal">Date range</h2>

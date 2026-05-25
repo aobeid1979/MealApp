@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { getValidToken, setRedirectPath } from "@/lib/auth";
 
@@ -62,6 +63,7 @@ export default function RecipeDetailsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [mealPlanMessage, setMealPlanMessage] = useState<string | null>(null);
+  const [wasAddedToMealPlan, setWasAddedToMealPlan] = useState(false);
   const [isAddingToMealPlan, setIsAddingToMealPlan] = useState(false);
   const [favoriteMessage, setFavoriteMessage] = useState<string | null>(null);
   const [isAddingFavorite, setIsAddingFavorite] = useState(false);
@@ -156,6 +158,7 @@ export default function RecipeDetailsPage() {
     }
 
     setMealPlanMessage(null);
+    setWasAddedToMealPlan(false);
     setIsAddingToMealPlan(true);
 
     try {
@@ -190,6 +193,7 @@ export default function RecipeDetailsPage() {
       }
 
       setMealPlanMessage("Recipe added to meal plan.");
+      setWasAddedToMealPlan(true);
     } catch (error) {
       setMealPlanMessage(
         error instanceof Error
@@ -324,6 +328,11 @@ export default function RecipeDetailsPage() {
               >
                 {isAddingToMealPlan ? "Adding..." : "Add to Meal Plan"}
               </button>
+              {wasAddedToMealPlan && (
+                <Link href="/meal-plan" className="secondary-button">
+                  Go to Meal Plan
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={handleAddFavorite}
