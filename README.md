@@ -83,9 +83,11 @@ In Production, set `SeedSampleData=true` only if you intentionally want demo dat
 ## Frontend API URL
 
 The frontend reads the API base URL from `frontend/.env.local`.
+Copy `frontend/.env.local.example` to `frontend/.env.local` for local development.
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:5280
 ```
 
 Restart the frontend after changing `.env.local`.
+For production, set `NEXT_PUBLIC_API_URL` to the deployed backend URL.
