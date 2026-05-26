@@ -34,6 +34,7 @@ PowerShell:
 $env:Jwt__Secret = "replace-with-a-long-random-secret-key"
 $env:AdminUser__Email = "admin@example.com"
 $env:AdminUser__Password = "replace-with-a-strong-admin-password"
+$env:Cors__AllowedOrigins__0 = "https://your-frontend-domain.com"
 ```
 
 Windows Command Prompt:
@@ -42,7 +43,42 @@ Windows Command Prompt:
 set Jwt__Secret=replace-with-a-long-random-secret-key
 set AdminUser__Email=admin@example.com
 set AdminUser__Password=replace-with-a-strong-admin-password
+set Cors__AllowedOrigins__0=https://your-frontend-domain.com
 ```
+
+## Backend CORS
+
+Allowed frontend URLs are read from `Cors:AllowedOrigins`.
+Local development keeps `http://localhost:3000` in `backend/appsettings.Development.json`.
+For production, configure the deployed frontend URL with environment variables such as:
+
+```text
+Cors__AllowedOrigins__0=https://your-frontend-domain.com
+```
+
+Add more origins with `Cors__AllowedOrigins__1`, `Cors__AllowedOrigins__2`, and so on.
+
+## Production Backend Configuration
+
+`backend/appsettings.Production.json` contains no LocalDB connection string and no secrets.
+Set production values on the hosting platform with environment variables:
+
+```text
+ConnectionStrings__DefaultConnection=your-production-sql-server-connection-string
+Jwt__Secret=replace-with-a-long-random-secret-key
+Jwt__Issuer=MealApp
+Jwt__Audience=MealAppUsers
+AdminUser__Email=admin@example.com
+AdminUser__Password=replace-with-a-strong-admin-password
+Cors__AllowedOrigins__0=https://your-frontend-domain.com
+SeedSampleData=false
+```
+
+ASP.NET Core loads `appsettings.Production.json` when `ASPNETCORE_ENVIRONMENT=Production`,
+then environment variables override those placeholder values.
+
+Sample recipe data is enabled by default only in local Development.
+In Production, set `SeedSampleData=true` only if you intentionally want demo data seeded.
 
 ## Frontend API URL
 

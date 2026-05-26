@@ -1,3 +1,4 @@
+#if DEBUG
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -30,3 +31,4 @@ public class TestAuthController : ApiControllerBase
         });
     }
 }
+#endif

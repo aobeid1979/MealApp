@@ -7,8 +7,15 @@ public static class SampleDataSeeder
 {
     public static async Task SeedAsync(IServiceProvider serviceProvider)
     {
+        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
         var context = serviceProvider.GetRequiredService<ApplicationDbContext>();
         var environment = serviceProvider.GetRequiredService<IHostEnvironment>();
+        var seedSampleData = configuration.GetValue<bool?>("SeedSampleData");
+
+        if (!environment.IsDevelopment() && seedSampleData != true)
+        {
+            return;
+        }
 
         if (environment.IsDevelopment())
         {
