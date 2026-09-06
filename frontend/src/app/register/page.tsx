@@ -60,10 +60,20 @@ export default function RegisterPage() {
         })
       });
 
-      const data = (await response.json()) as ApiResponse<RegisterResult>;
+      let data: ApiResponse<RegisterResult> | null = null;
+
+      try {
+        data = (await response.json()) as ApiResponse<RegisterResult>;
+      } catch {
+        throw new Error("Unable to connect to the server. Please try again.");
+      }
 
       if (!data.isSuccess || !response.ok) {
-        throw new Error(data.errorMessages?.[0] ?? "Registration failed.");
+        throw new Error(
+          data.errorMessages?.length
+            ? data.errorMessages.join(" ")
+            : "Registration failed."
+        );
       }
 
       setMessage("Registration successful. You can now log in.");
@@ -73,7 +83,11 @@ export default function RegisterPage() {
     } catch (error) {
       setIsError(true);
       setMessage(
-        error instanceof Error ? error.message : "Registration failed."
+        error instanceof TypeError
+          ? "Unable to connect to the server. Please try again."
+          : error instanceof Error
+            ? error.message
+            : "Registration failed."
       );
     } finally {
       setIsSubmitting(false);
@@ -169,15 +183,15 @@ export default function RegisterPage() {
       </form>
 
       {message && (
-        <p
+        <div
           className={
             isError
-              ? "mt-4 text-sm text-red-700"
-              : "mt-4 text-sm text-slate-700"
+              ? "error-panel mt-4"
+              : "mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
           }
         >
           {message}
-        </p>
+        </div>
       )}
     </section>
   );

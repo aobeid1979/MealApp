@@ -12,6 +12,8 @@ using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 const string FrontendCorsPolicy = "FrontendCorsPolicy";
 
+ValidateProductionConfiguration(builder.Configuration, builder.Environment);
+
 // Add services to the container.
 
 builder.Services.AddControllers()
@@ -175,6 +177,79 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+static void ValidateProductionConfiguration(IConfiguration configuration, IWebHostEnvironment environment)
+{
+    if (!environment.IsProduction())
+    {
+        return;
+    }
+
+    string[] requiredEnvironmentVariables =
+    [
+        "ConnectionStrings__DefaultConnection",
+        "Jwt__Secret",
+        "Jwt__Issuer",
+        "Jwt__Audience",
+        "AdminUser__Email",
+        "AdminUser__Password",
+        "Cors__AllowedOrigins__0",
+        "SeedSampleData"
+    ];
+
+    foreach (var variableName in requiredEnvironmentVariables)
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(variableName)))
+        {
+            throw new InvalidOperationException(
+                $"{variableName} is not configured. Set it as a production environment variable.");
+        }
+    }
+
+    var requiredValues = new Dictionary<string, string?>
+    {
+        ["ConnectionStrings:DefaultConnection"] = configuration.GetConnectionString("DefaultConnection"),
+        ["Jwt:Secret"] = configuration["Jwt:Secret"],
+        ["Jwt:Issuer"] = configuration["Jwt:Issuer"],
+        ["Jwt:Audience"] = configuration["Jwt:Audience"],
+        ["AdminUser:Email"] = configuration["AdminUser:Email"],
+        ["AdminUser:Password"] = configuration["AdminUser:Password"]
+    };
+
+    foreach (var requiredValue in requiredValues)
+    {
+        if (string.IsNullOrWhiteSpace(requiredValue.Value))
+        {
+            throw new InvalidOperationException(
+                $"{requiredValue.Key} is not configured. Set it with a production environment variable.");
+        }
+    }
+
+    var connectionString = configuration.GetConnectionString("DefaultConnection")!;
+
+    if (connectionString.Contains("(localdb)", StringComparison.OrdinalIgnoreCase)
+        || connectionString.Contains("mssqllocaldb", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException(
+            "ConnectionStrings:DefaultConnection must not use LocalDB in Production.");
+    }
+
+    var allowedOrigins = configuration
+        .GetSection("Cors:AllowedOrigins")
+        .Get<string[]>() ?? [];
+
+    if (allowedOrigins.Length == 0 || allowedOrigins.Any(string.IsNullOrWhiteSpace))
+    {
+        throw new InvalidOperationException(
+            "Cors:AllowedOrigins is not configured. Set Cors__AllowedOrigins__0 to the production frontend URL.");
+    }
+
+    if (!configuration.GetSection("SeedSampleData").Exists())
+    {
+        throw new InvalidOperationException(
+            "SeedSampleData is not configured. Set SeedSampleData to false unless sample data is intentionally needed.");
+    }
+}
 
 public partial class Program
 {

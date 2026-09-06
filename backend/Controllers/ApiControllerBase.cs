@@ -38,6 +38,12 @@ public abstract class ApiControllerBase : ControllerBase
         return base.Unauthorized(CreateErrorResponse("Unauthorized.", StatusCodes.Status401Unauthorized));
     }
 
+    [NonAction]
+    public new UnauthorizedObjectResult Unauthorized(object? error)
+    {
+        return base.Unauthorized(CreateErrorResponse(error, StatusCodes.Status401Unauthorized));
+    }
+
     private static ApiResponse CreateSuccessResponse(object? result, int statusCode)
     {
         return new ApiResponse

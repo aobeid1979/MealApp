@@ -154,11 +154,12 @@ public class AuthController : ApiControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginDto loginDto)
     {
-        var user = await _userManager.FindByEmailAsync(loginDto.Email);
+        var email = loginDto.Email.Trim();
+        var user = await _userManager.FindByEmailAsync(email);
 
         if (user is null)
         {
-            return BadRequest(new
+            return Unauthorized(new
             {
                 Message = "Invalid email or password."
             });
@@ -176,7 +177,7 @@ public class AuthController : ApiControllerBase
 
         if (!passwordIsValid)
         {
-            return BadRequest(new
+            return Unauthorized(new
             {
                 Message = "Invalid email or password."
             });

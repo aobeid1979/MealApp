@@ -49,7 +49,13 @@ export default function LoginPage() {
         })
       });
 
-      const data = (await response.json()) as ApiResponse<LoginResult>;
+      let data: ApiResponse<LoginResult> | null = null;
+
+      try {
+        data = (await response.json()) as ApiResponse<LoginResult>;
+      } catch {
+        throw new Error("Unable to connect to the server. Please try again.");
+      }
 
       if (!data.isSuccess || !response.ok) {
         throw new Error(data.errorMessages?.[0] ?? "Login failed.");
@@ -77,7 +83,13 @@ export default function LoginPage() {
 
       router.push("/");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Login failed.");
+      setMessage(
+        error instanceof TypeError
+          ? "Unable to connect to the server. Please try again."
+          : error instanceof Error
+            ? error.message
+            : "Login failed."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -132,7 +144,7 @@ export default function LoginPage() {
         </button>
       </form>
 
-      {message && <p className="mt-4 text-sm text-slate-700">{message}</p>}
+      {message && <div className="error-panel mt-4">{message}</div>}
     </section>
   );
 }

@@ -12,6 +12,15 @@ node_modules/
 # Env files
 .env
 .env.local
+.env*.local
+
+# Local secrets / certificates
+secrets.json
+*.pem
+*.key
+*.pfx
+*.crt
+*.cer
 
 # Logs
 *.log

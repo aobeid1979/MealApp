@@ -29,7 +29,13 @@ public static class AdminSeeder
 
         if (!await roleManager.RoleExistsAsync(AdminRole))
         {
-            await roleManager.CreateAsync(new IdentityRole(AdminRole));
+            var roleResult = await roleManager.CreateAsync(new IdentityRole(AdminRole));
+
+            if (!roleResult.Succeeded)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to create {AdminRole} role: {FormatErrors(roleResult)}");
+            }
         }
 
         var adminUser = await userManager.FindByEmailAsync(email);
@@ -50,13 +56,25 @@ public static class AdminSeeder
 
             if (!createResult.Succeeded)
             {
-                return;
+                throw new InvalidOperationException(
+                    $"Failed to create default admin user: {FormatErrors(createResult)}");
             }
         }
 
         if (!await userManager.IsInRoleAsync(adminUser, AdminRole))
         {
-            await userManager.AddToRoleAsync(adminUser, AdminRole);
+            var addToRoleResult = await userManager.AddToRoleAsync(adminUser, AdminRole);
+
+            if (!addToRoleResult.Succeeded)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to assign {AdminRole} role to default admin user: {FormatErrors(addToRoleResult)}");
+            }
         }
+    }
+
+    private static string FormatErrors(IdentityResult result)
+    {
+        return string.Join("; ", result.Errors.Select(error => error.Description));
     }
 }

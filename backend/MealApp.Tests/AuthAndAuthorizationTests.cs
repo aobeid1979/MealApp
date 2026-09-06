@@ -122,6 +122,89 @@ public class AuthAndAuthorizationTests
     }
 
     [Fact]
+    public async Task Login_WithIncorrectPassword_ReturnsInvalidCredentialsApiResponse()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(factory, client, email);
+
+        var response = await client.PostAsJsonAsync("/api/auth/login", new
+        {
+            email,
+            password = "WrongPass123$"
+        });
+
+        await AssertInvalidLoginResponseAsync(response);
+    }
+
+    [Fact]
+    public async Task Login_WithUnknownEmail_ReturnsInvalidCredentialsApiResponse()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/auth/login", new
+        {
+            email = CreateEmail(),
+            password = "Pass123$"
+        });
+
+        await AssertInvalidLoginResponseAsync(response);
+    }
+
+    [Fact]
+    public async Task Login_WithSurroundingEmailWhitespace_ReturnsToken()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(factory, client, email);
+
+        var response = await client.PostAsJsonAsync("/api/auth/login", new
+        {
+            email = $"  {email}  ",
+            password = "Pass123$"
+        });
+
+        await EnsureSuccessAsync(response);
+
+        using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        var result = json.RootElement.GetProperty("result");
+
+        Assert.True(json.RootElement.GetProperty("isSuccess").GetBoolean());
+        Assert.False(string.IsNullOrWhiteSpace(result.GetProperty("token").GetString()));
+        Assert.Equal(email, result.GetProperty("email").GetString());
+        Assert.False(json.RootElement.TryGetProperty("token", out _));
+    }
+
+    [Fact]
+    public async Task FailedLogin_ReturnsExpectedApiErrorFormat()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/auth/login", new
+        {
+            email = CreateEmail(),
+            password = "Pass123$"
+        });
+
+        using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        var root = json.RootElement;
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.False(root.GetProperty("isSuccess").GetBoolean());
+        Assert.Equal(401, root.GetProperty("statusCode").GetInt32());
+        Assert.Equal(
+            "Invalid email or password.",
+            root.GetProperty("errorMessages")[0].GetString());
+        Assert.True(root.TryGetProperty("result", out _));
+    }
+
+    [Fact]
     public async Task NormalUser_CannotAccessAdminEndpoints()
     {
         await using var factory = new MealAppApiFactory();
@@ -671,6 +754,19 @@ public class AuthAndAuthorizationTests
 
         throw new HttpRequestException(
             $"Response status code does not indicate success: {(int)response.StatusCode} ({response.StatusCode}). Body: {body}");
+    }
+
+    private static async Task AssertInvalidLoginResponseAsync(HttpResponseMessage response)
+    {
+        using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        var root = json.RootElement;
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.False(root.GetProperty("isSuccess").GetBoolean());
+        Assert.Equal(401, root.GetProperty("statusCode").GetInt32());
+        Assert.Equal(
+            "Invalid email or password.",
+            root.GetProperty("errorMessages")[0].GetString());
     }
 }
 
