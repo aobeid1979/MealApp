@@ -1,0 +1,11 @@
+bin/
+obj/
+.vs/
+.dotnet/
+build-check-output/
+release-build-check-output/
+release-test-build-output/
+test-build-output/
+*.log
+Dockerfile
+.dockerignore
