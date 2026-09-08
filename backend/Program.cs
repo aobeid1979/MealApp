@@ -1,6 +1,8 @@
 using MealApp.Data;
 using MealApp.Middleware;
 using MealApp.Models;
+using MealApp.Services;
+using MealApp.Services.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -39,6 +41,9 @@ builder.Services.AddControllers()
             return new BadRequestObjectResult(response);
         };
     });
+builder.Services.Configure<SupportEmailOptions>(
+    builder.Configuration.GetSection("SupportEmail"));
+builder.Services.AddScoped<ISupportRequestService, SupportRequestService>();
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection"),

@@ -214,12 +214,12 @@ export default function Home() {
         </div>
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-5">
           <p className="text-sm font-semibold text-slate-950">Support</p>
-          <a
-            href="mailto:meallist.support@gmail.com"
+          <Link
+            href="/support"
             className="mt-2 inline-flex text-sm font-medium text-emerald-700 transition hover:text-emerald-800"
           >
             meallist.support@gmail.com
-          </a>
+          </Link>
           <p className="mt-4 text-sm font-semibold text-slate-950">Hours</p>
           <p className="mt-2 text-sm text-slate-600">Monday to Friday, 9:00-17:00</p>
         </div>
