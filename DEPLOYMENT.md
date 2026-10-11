@@ -19,7 +19,6 @@ AdminUser__Email=admin@example.com
 AdminUser__Password=replace-with-a-strong-admin-password
 Cors__AllowedOrigins__0=https://your-frontend-domain.com
 SeedSampleData=false
-BrevoEmail__Enabled=false
 ```
 
 Notes:
@@ -28,47 +27,18 @@ Notes:
 - Do not commit real connection strings, JWT secrets, or admin passwords.
 - Add more allowed frontend origins with `Cors__AllowedOrigins__1`, `Cors__AllowedOrigins__2`, and so on.
 - Set `SeedSampleData=true` only if you intentionally want demo recipes seeded in production.
-- Brevo delivery is disabled by default. Explicitly set `BrevoEmail__Enabled=false`
-  to deploy without Brevo credentials. All other required backend settings above
-  remain required and unchanged.
 
-## Support Email Configuration
+## Support Availability
 
-Support sends email through Brevo's transactional HTTP API over HTTPS; no SMTP
-credentials or outbound SMTP ports are used. Configuration keys map as follows:
+Outgoing support email delivery has been removed. No email-provider environment
+variables, credentials, or enable flags are required. Old email-provider settings
+are unused and can be removed from the hosting platform separately.
 
-| Configuration key | Hosting environment variable |
-| --- | --- |
-| `BrevoEmail:Enabled` | `BrevoEmail__Enabled` |
-| `BrevoEmail:ApiKey` | `BrevoEmail__ApiKey` |
-| `BrevoEmail:SenderEmail` | `BrevoEmail__SenderEmail` |
-| `BrevoEmail:SenderName` | `BrevoEmail__SenderName` |
-| `BrevoEmail:ToEmail` | `BrevoEmail__ToEmail` |
-
-With `BrevoEmail__Enabled=false`, valid Support submissions return HTTP 503 and
-`Support email delivery is temporarily unavailable. Please try again later.`
-No email is sent or queued, and no Brevo credentials are required at startup.
-Existing request validation and authenticated identity handling remain active.
-Remove obsolete `SupportEmail__*` Gmail SMTP variables from Render; they are unused.
-
-To enable delivery later, set:
-
-```text
-BrevoEmail__Enabled=true
-BrevoEmail__ApiKey=replace-with-your-private-brevo-api-key
-BrevoEmail__SenderEmail=verified-sender@example.com
-BrevoEmail__SenderName=your-support-sender-name
-BrevoEmail__ToEmail=meallist.support@gmail.com
-```
-
-Enabled delivery validates all four effective settings at startup, including valid
-sender/recipient email addresses. Missing/invalid settings fail clearly without
-printing credentials. This does not test the key with Brevo or verify sender ownership.
-
-Use a private transactional API key stored in the hosting platform's secret
-settings. Verify the sender email or its domain in Brevo. Set the intended support
-recipient on the host. All example values here are placeholders, not credentials.
-For local development use .NET User Secrets as described in README.md.
+The Support page and `POST /api/support` route remain. Valid submissions receive
+HTTP 503 with `Support email delivery is temporarily unavailable. Please try again later.`
+Requests and attachments are not sent, queued, or stored. Existing validation and
+authenticated account checks still apply. All required backend settings listed
+above remain unchanged. Database connectivity errors must be diagnosed separately.
 
 ## Historical Signing Key Check
 

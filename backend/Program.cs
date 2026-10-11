@@ -6,7 +6,6 @@ using MealApp.Services.Import;
 using MealApp.Services.AgentTools;
 using MealApp.Services.Agent;
 using MealApp.Services.AgentActions;
-using MealApp.Services.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -45,11 +44,6 @@ builder.Services.AddControllers()
             return new BadRequestObjectResult(response);
         };
     });
-builder.Services.AddSingleton<Microsoft.Extensions.Options.IValidateOptions<BrevoEmailOptions>, BrevoEmailOptionsValidator>();
-builder.Services.AddOptions<BrevoEmailOptions>()
-    .Bind(builder.Configuration.GetSection("BrevoEmail"))
-    .ValidateOnStart();
-builder.Services.AddHttpClient<ISupportRequestService, SupportRequestService>();
 builder.Services.AddScoped<DataImportService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<RecipeReadService>();

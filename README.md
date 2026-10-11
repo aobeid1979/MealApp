@@ -72,7 +72,6 @@ AdminUser__Email=admin@example.com
 AdminUser__Password=replace-with-a-strong-admin-password
 Cors__AllowedOrigins__0=https://your-frontend-domain.com
 SeedSampleData=false
-BrevoEmail__Enabled=false
 ```
 
 ASP.NET Core loads `appsettings.Production.json` when `ASPNETCORE_ENVIRONMENT=Production`,
@@ -81,38 +80,16 @@ then environment variables override those placeholder values.
 Sample recipe data is enabled by default only in local Development.
 In Production, set `SeedSampleData=true` only if you intentionally want demo data seeded.
 
-## Support Email (Brevo)
+## Support Availability
 
-Support uses Brevo's transactional HTTPS API, not Gmail SMTP. Delivery defaults to
-disabled. Set `BrevoEmail__Enabled=false` on Render to start without Brevo credentials.
-Valid support submissions then return HTTP 503 with a clear unavailable message;
-they are not sent or queued. Request validation and account identity checks still apply.
-Obsolete `SupportEmail__*` SMTP settings are unused and can be removed from Render.
+The Support page and `POST /api/support` remain available, but outgoing email
+delivery has been removed. Valid submissions return HTTP 503 with
+`Support email delivery is temporarily unavailable. Please try again later.`
+Requests and attachments are not sent, queued, or stored. Input/image validation
+and authenticated account checks still apply. No email-provider credentials or
+configuration flags are required. Old email-provider environment settings are
+unused and can be removed from the host separately.
 
-To enable delivery, set `BrevoEmail__Enabled=true` and configure:
-
-```text
-BrevoEmail__ApiKey=replace-with-your-private-brevo-api-key
-BrevoEmail__SenderEmail=verified-sender@example.com
-BrevoEmail__SenderName=your-support-sender-name
-BrevoEmail__ToEmail=meallist.support@gmail.com
-```
-
-When enabled, startup validates all four effective configuration values, including
-sender/recipient email format. Verify the sender email or its domain in Brevo.
-Startup checks configuration, not the validity of credentials with Brevo itself.
-
-For local development, configure the same values using User Secrets from `backend`:
-
-```powershell
-dotnet user-secrets set "BrevoEmail:Enabled" "true"
-dotnet user-secrets set "BrevoEmail:ApiKey" "replace-with-your-private-brevo-api-key"
-dotnet user-secrets set "BrevoEmail:SenderEmail" "verified-sender@example.com"
-dotnet user-secrets set "BrevoEmail:SenderName" "your-support-sender-name"
-dotnet user-secrets set "BrevoEmail:ToEmail" "your-support-recipient@example.com"
-```
-
-Never commit the real API key, local environment files, or User Secrets.
 See [DEPLOYMENT.md](DEPLOYMENT.md) for production setup and credential safety checks.
 
 ## Frontend API URL
