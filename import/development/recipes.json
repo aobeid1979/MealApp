@@ -1,0 +1,244 @@
+{
+  "items": [
+    {
+      "name": "Tomato and Spinach Pasta",
+      "category": "Pasta",
+      "description": "A simple vegetable pasta dinner.",
+      "servings": 4,
+      "preparationTimeMinutes": 15,
+      "cookingTimeMinutes": 15,
+      "ingredients": [
+        {
+          "ingredient": "Spaghetti",
+          "quantity": 400,
+          "unit": "g"
+        },
+        {
+          "ingredient": "Tomato Sauce",
+          "quantity": 400,
+          "unit": "ml"
+        },
+        {
+          "ingredient": "Spinach",
+          "quantity": 150,
+          "unit": "g"
+        },
+        {
+          "ingredient": "Parmesan Cheese",
+          "quantity": 40,
+          "unit": "g"
+        }
+      ],
+      "steps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Boil the pasta according to package instructions."
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Warm tomato sauce and wilt spinach in it."
+        },
+        {
+          "stepNumber": 3,
+          "instruction": "Drain pasta, mix with sauce, and finish with parmesan."
+        }
+      ],
+      "tools": [
+        "Pot",
+        "Colander",
+        "Pan"
+      ]
+    },
+    {
+      "name": "Lemon Chicken with Broccoli",
+      "category": "Chicken",
+      "description": "Pan-cooked chicken with vegetables.",
+      "servings": 4,
+      "preparationTimeMinutes": 15,
+      "cookingTimeMinutes": 15,
+      "ingredients": [
+        {
+          "ingredient": "Chicken Breast",
+          "quantity": 600,
+          "unit": "g"
+        },
+        {
+          "ingredient": "Broccoli",
+          "quantity": 400,
+          "unit": "g"
+        },
+        {
+          "ingredient": "Lemon",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient": "Olive Oil",
+          "quantity": 2,
+          "unit": "tbsp"
+        }
+      ],
+      "steps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Cut chicken into even pieces and slice broccoli."
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Cook chicken in oil until it reaches a safe internal temperature."
+        },
+        {
+          "stepNumber": 3,
+          "instruction": "Steam broccoli and serve with chicken and lemon."
+        }
+      ],
+      "tools": [
+        "Pan",
+        "Knife",
+        "Steamer"
+      ]
+    },
+    {
+      "name": "Chickpea Feta Salad",
+      "category": "Salad",
+      "description": "A fresh salad with chickpeas and cheese.",
+      "servings": 4,
+      "preparationTimeMinutes": 15,
+      "cookingTimeMinutes": 15,
+      "ingredients": [
+        {
+          "ingredient": "Chickpeas",
+          "quantity": 400,
+          "unit": "g"
+        },
+        {
+          "ingredient": "Tomato",
+          "quantity": 300,
+          "unit": "g"
+        },
+        {
+          "ingredient": "Cucumber",
+          "quantity": 200,
+          "unit": "g"
+        },
+        {
+          "ingredient": "Feta Cheese",
+          "quantity": 100,
+          "unit": "g"
+        },
+        {
+          "ingredient": "Olive Oil",
+          "quantity": 2,
+          "unit": "tbsp"
+        }
+      ],
+      "steps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Dice tomato and cucumber."
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Combine vegetables, chickpeas, feta and olive oil."
+        }
+      ],
+      "tools": [
+        "Knife",
+        "Bowl"
+      ]
+    },
+    {
+      "name": "Banana Berry Yogurt",
+      "category": "Dessert",
+      "description": "A simple fruit and yogurt dessert.",
+      "servings": 4,
+      "preparationTimeMinutes": 5,
+      "cookingTimeMinutes": 15,
+      "ingredients": [
+        {
+          "ingredient": "Greek Yogurt",
+          "quantity": 400,
+          "unit": "g"
+        },
+        {
+          "ingredient": "Banana",
+          "quantity": 2,
+          "unit": "pcs"
+        },
+        {
+          "ingredient": "Mixed Berries",
+          "quantity": 200,
+          "unit": "g"
+        }
+      ],
+      "steps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Slice bananas."
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Divide yogurt into bowls and top with fruit."
+        }
+      ],
+      "tools": [
+        "Knife",
+        "Bowls"
+      ]
+    },
+    {
+      "name": "Couscous Vegetable Salad",
+      "category": "Salad",
+      "description": "A couscous salad with lemon dressing.",
+      "servings": 4,
+      "preparationTimeMinutes": 15,
+      "cookingTimeMinutes": 15,
+      "ingredients": [
+        {
+          "ingredient": "Couscous",
+          "quantity": 250,
+          "unit": "g"
+        },
+        {
+          "ingredient": "Carrot",
+          "quantity": 150,
+          "unit": "g"
+        },
+        {
+          "ingredient": "Tomato",
+          "quantity": 200,
+          "unit": "g"
+        },
+        {
+          "ingredient": "Lemon",
+          "quantity": 1,
+          "unit": "pcs"
+        },
+        {
+          "ingredient": "Olive Oil",
+          "quantity": 2,
+          "unit": "tbsp"
+        }
+      ],
+      "steps": [
+        {
+          "stepNumber": 1,
+          "instruction": "Prepare couscous according to package instructions and let cool."
+        },
+        {
+          "stepNumber": 2,
+          "instruction": "Dice vegetables and mix with couscous."
+        },
+        {
+          "stepNumber": 3,
+          "instruction": "Dress with lemon juice and oil."
+        }
+      ],
+      "tools": [
+        "Pot",
+        "Knife",
+        "Bowl"
+      ]
+    }
+  ]
+}

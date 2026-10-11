@@ -19,6 +19,10 @@ AdminUser__Email=admin@example.com
 AdminUser__Password=replace-with-a-strong-admin-password
 Cors__AllowedOrigins__0=https://your-frontend-domain.com
 SeedSampleData=false
+BrevoEmail__ApiKey=replace-with-your-private-brevo-api-key
+BrevoEmail__SenderEmail=verified-sender@example.com
+BrevoEmail__SenderName=your-support-sender-name
+BrevoEmail__ToEmail=your-support-recipient@example.com
 ```
 
 Notes:
@@ -27,6 +31,35 @@ Notes:
 - Do not commit real connection strings, JWT secrets, or admin passwords.
 - Add more allowed frontend origins with `Cors__AllowedOrigins__1`, `Cors__AllowedOrigins__2`, and so on.
 - Set `SeedSampleData=true` only if you intentionally want demo recipes seeded in production.
+- All four Brevo variables are required by production startup validation. Configure
+  them before restarting the service, or startup will fail clearly.
+
+## Support Email Configuration
+
+Support sends email through Brevo's transactional HTTP API over HTTPS; no SMTP
+credentials or outbound SMTP ports are used. Configuration keys map as follows:
+
+| Configuration key | Hosting environment variable |
+| --- | --- |
+| `BrevoEmail:ApiKey` | `BrevoEmail__ApiKey` |
+| `BrevoEmail:SenderEmail` | `BrevoEmail__SenderEmail` |
+| `BrevoEmail:SenderName` | `BrevoEmail__SenderName` |
+| `BrevoEmail:ToEmail` | `BrevoEmail__ToEmail` |
+
+Use a private transactional API key stored in the hosting platform's secret
+settings. Verify the sender email or its domain in Brevo. Set the intended support
+recipient on the host. All example values here are placeholders, not credentials.
+For local development use .NET User Secrets as described in README.md.
+
+## Historical Signing Key Check
+
+Commit `72631a1` contained a signing-secret literal under `Jwt:Secret` in
+`backend/appsettings.json`. Current configuration does not contain that value;
+production must supply `Jwt__Secret` externally. Its external value cannot be
+verified from this repository. Treat the historical key as exposed and confirm
+that no active environment reuses it. If it is reused, arrange an explicitly
+approved credential rotation; existing tokens signed with the old key will stop
+working. Removing a value from current files does not remove it from Git history.
 
 ## Required Frontend Environment Variables
 
@@ -103,6 +136,7 @@ Frontend:
 ```powershell
 cd frontend
 npm run lint
+node --test tests/agent-response.test.cjs
 npm run build
 ```
 

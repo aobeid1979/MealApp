@@ -125,14 +125,25 @@ public class CategoryController : ApiControllerBase
         }
 
         var categoryHasRecipes = await _context.Recipes
-            .AnyAsync(recipe => recipe.CategoryId == id);
+            .CountAsync(recipe => recipe.CategoryId == id);
 
-        if (categoryHasRecipes)
+        if (categoryHasRecipes > 0)
         {
-            return BadRequest(new
-            {
-                Message = "Cannot delete category because it has recipes."
-            });
+            return StatusCode(
+                StatusCodes.Status409Conflict,
+                new ApiResponse
+                {
+                    IsSuccess = false,
+                    Result = new
+                    {
+                        RecipeCount = categoryHasRecipes
+                    },
+                    ErrorMessages =
+                    [
+                        "Cannot delete category because it is used by existing recipes."
+                    ],
+                    StatusCode = StatusCodes.Status409Conflict
+                });
         }
 
         _context.Categories.Remove(category);

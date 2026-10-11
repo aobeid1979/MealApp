@@ -266,6 +266,104 @@ public class AuthAndAuthorizationTests
     }
 
     [Fact]
+    public async Task Admin_CanDeleteUnusedCategory()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await CreateAdminAsync(factory, email);
+        var categoryId = await CreateCategoryAsync(factory);
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.DeleteAsync($"/api/category/{categoryId}");
+
+        await EnsureSuccessAsync(response);
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        Assert.False(await context.Categories.AnyAsync(category => category.Id == categoryId));
+    }
+
+    [Fact]
+    public async Task Admin_CannotDeleteCategoryUsedByOneRecipe()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await CreateAdminAsync(factory, email);
+        var setup = await CreateCategoryWithRecipesAsync(factory, recipeCount: 1);
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.DeleteAsync($"/api/category/{setup.CategoryId}");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        var root = json.RootElement;
+
+        Assert.False(root.GetProperty("isSuccess").GetBoolean());
+        Assert.Equal(409, root.GetProperty("statusCode").GetInt32());
+        Assert.Equal(
+            "Cannot delete category because it is used by existing recipes.",
+            root.GetProperty("errorMessages")[0].GetString());
+        Assert.Equal(1, root.GetProperty("result").GetProperty("recipeCount").GetInt32());
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        Assert.True(await context.Categories.AnyAsync(category => category.Id == setup.CategoryId));
+        Assert.Equal(1, await context.Recipes.CountAsync(recipe => recipe.CategoryId == setup.CategoryId));
+    }
+
+    [Fact]
+    public async Task Admin_CannotDeleteCategoryUsedByMultipleRecipes()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await CreateAdminAsync(factory, email);
+        var setup = await CreateCategoryWithRecipesAsync(factory, recipeCount: 3);
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.DeleteAsync($"/api/category/{setup.CategoryId}");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        var root = json.RootElement;
+
+        Assert.Equal(3, root.GetProperty("result").GetProperty("recipeCount").GetInt32());
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        Assert.Equal(3, await context.Recipes.CountAsync(recipe => recipe.CategoryId == setup.CategoryId));
+    }
+
+    [Fact]
+    public async Task Admin_DeleteCategoryWithInvalidIdReturnsNotFound()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await CreateAdminAsync(factory, email);
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.DeleteAsync("/api/category/999999");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task User_CanAddExistingIngredientToShoppingList()
     {
         await using var factory = new MealAppApiFactory();
@@ -306,7 +404,116 @@ public class AuthAndAuthorizationTests
     }
 
     [Fact]
-    public async Task GenerateShoppingList_MergesDuplicateIngredientAndUnit()
+    public async Task User_CanAddCustomShoppingListItem()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(factory, client, email);
+        var setup = await CreateShoppingListSetupAsync(factory, email);
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsJsonAsync($"/api/shoppinglist/{setup.ShoppingListId}/items", new
+        {
+            customName = "Toothpaste"
+        });
+
+        await EnsureSuccessAsync(response);
+
+        using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        var result = json.RootElement.GetProperty("result");
+
+        Assert.Equal("Toothpaste", result.GetProperty("customName").GetString());
+        Assert.Equal("Toothpaste", result.GetProperty("itemName").GetString());
+        Assert.Equal(JsonValueKind.Null, result.GetProperty("ingredientId").ValueKind);
+        Assert.Equal(JsonValueKind.Null, result.GetProperty("quantity").ValueKind);
+        Assert.False(result.GetProperty("isGenerated").GetBoolean());
+    }
+
+    [Fact]
+    public async Task User_CannotAddBlankCustomShoppingListItem()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(factory, client, email);
+        var setup = await CreateShoppingListSetupAsync(factory, email);
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsJsonAsync($"/api/shoppinglist/{setup.ShoppingListId}/items", new
+        {
+            customName = " "
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task User_CannotAddIngredientAndCustomNameInSameShoppingListItem()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(factory, client, email);
+        var setup = await CreateShoppingListSetupAsync(factory, email);
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsJsonAsync($"/api/shoppinglist/{setup.ShoppingListId}/items", new
+        {
+            ingredientId = setup.IngredientId,
+            customName = "Custom chicken",
+            quantity = 1,
+            unitId = setup.UnitId
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task User_CanMergeDuplicateCustomShoppingListItems()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(factory, client, email);
+        var setup = await CreateShoppingListSetupAsync(factory, email);
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        await EnsureSuccessAsync(await client.PostAsJsonAsync($"/api/shoppinglist/{setup.ShoppingListId}/items", new
+        {
+            customName = "Bananas",
+            quantity = 2,
+            unitId = setup.UnitId
+        }));
+        await EnsureSuccessAsync(await client.PostAsJsonAsync($"/api/shoppinglist/{setup.ShoppingListId}/items", new
+        {
+            customName = "bananas",
+            quantity = 3,
+            unitId = setup.UnitId
+        }));
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var item = await context.ShoppingListItems
+            .SingleAsync(item => item.ShoppingListId == setup.ShoppingListId
+                && item.CustomName == "Bananas"
+                && item.IngredientId == null);
+
+        Assert.Equal(5, item.Quantity);
+        Assert.Equal(setup.UnitId, item.UnitId);
+        Assert.False(item.IsGenerated);
+    }
+
+    [Fact]
+    public async Task GenerateShoppingList_PreservesCustomManualItems()
     {
         await using var factory = new MealAppApiFactory();
         var client = factory.CreateClient();
@@ -314,6 +521,93 @@ public class AuthAndAuthorizationTests
 
         await RegisterUserAsync(factory, client, email);
         var setup = await CreateMealPlanShoppingListMergeSetupAsync(factory, email);
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        await EnsureSuccessAsync(await client.PostAsJsonAsync($"/api/shoppinglist/{setup.ShoppingListId}/items", new
+        {
+            customName = "Paper towels"
+        }));
+        await EnsureSuccessAsync(await client.PostAsync("/api/shoppinglist/generate", null));
+        await EnsureSuccessAsync(await client.PostAsync("/api/shoppinglist/generate", null));
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var items = await context.ShoppingListItems
+            .Where(item => item.ShoppingListId == setup.ShoppingListId)
+            .ToListAsync();
+
+        var customItem = Assert.Single(items, item => item.CustomName == "Paper towels");
+        Assert.False(customItem.IsGenerated);
+        Assert.Null(customItem.IngredientId);
+
+        var generatedItem = Assert.Single(items, item => item.IsGenerated == true);
+        Assert.Equal(setup.IngredientId, generatedItem.IngredientId);
+        Assert.Equal(3, generatedItem.Quantity);
+    }
+
+    [Fact]
+    public async Task User_CanToggleCustomShoppingListItem()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(factory, client, email);
+        var setup = await CreateShoppingListSetupAsync(factory, email);
+        var itemId = await AddCustomShoppingListItemAsync(factory, setup.ShoppingListId, "Dishwasher tablets");
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PatchAsync($"/api/shoppinglist/items/{itemId}/toggle", null);
+
+        await EnsureSuccessAsync(response);
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var item = await context.ShoppingListItems.SingleAsync(item => item.Id == itemId);
+
+        Assert.True(item.IsChecked);
+    }
+
+    [Fact]
+    public async Task User_CannotUpdateAnotherUsersCustomShoppingListItem()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var firstEmail = CreateEmail();
+        var secondEmail = CreateEmail();
+
+        await RegisterUserAsync(factory, client, firstEmail);
+        await RegisterUserAsync(factory, client, secondEmail);
+        var otherSetup = await CreateShoppingListSetupAsync(factory, secondEmail);
+        var otherItemId = await AddCustomShoppingListItemAsync(factory, otherSetup.ShoppingListId, "Toothpaste", 1);
+        var token = await LoginAndGetTokenAsync(client, firstEmail);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PutAsJsonAsync($"/api/shoppinglist/items/{otherItemId}", new
+        {
+            quantity = 2
+        });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var item = await context.ShoppingListItems.SingleAsync(item => item.Id == otherItemId);
+
+        Assert.Equal(1, item.Quantity);
+    }
+
+    [Fact]
+    public async Task GenerateShoppingList_PreservesManualItemWithSameIngredientAndUnit()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(factory, client, email);
+        var setup = await CreateMealPlanShoppingListMergeSetupAsync(factory, email, includeManualItem: true);
         var token = await LoginAndGetTokenAsync(client, email);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
@@ -327,11 +621,175 @@ public class AuthAndAuthorizationTests
             .Where(item => item.ShoppingListId == setup.ShoppingListId)
             .ToListAsync();
 
-        var mergedItem = Assert.Single(items);
-        Assert.Equal(setup.IngredientId, mergedItem.IngredientId);
-        Assert.Equal(setup.UnitId, mergedItem.UnitId);
-        Assert.Equal(5, mergedItem.Quantity);
-        Assert.True(mergedItem.IsChecked);
+        Assert.Equal(2, items.Count);
+
+        var manualItem = Assert.Single(items, item => item.IsGenerated == false);
+        Assert.Equal(setup.IngredientId, manualItem.IngredientId);
+        Assert.Equal(setup.UnitId, manualItem.UnitId);
+        Assert.Equal(2, manualItem.Quantity);
+        Assert.True(manualItem.IsChecked);
+
+        var generatedItem = Assert.Single(items, item => item.IsGenerated == true);
+        Assert.Equal(setup.IngredientId, generatedItem.IngredientId);
+        Assert.Equal(setup.UnitId, generatedItem.UnitId);
+        Assert.Equal(3, generatedItem.Quantity);
+        Assert.False(generatedItem.IsChecked);
+    }
+
+    [Fact]
+    public async Task GenerateShoppingList_IsIdempotent_WhenRunRepeatedly()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(factory, client, email);
+        var setup = await CreateMealPlanShoppingListMergeSetupAsync(factory, email);
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        await EnsureSuccessAsync(await client.PostAsync("/api/shoppinglist/generate", null));
+        await EnsureSuccessAsync(await client.PostAsync("/api/shoppinglist/generate", null));
+        await EnsureSuccessAsync(await client.PostAsync("/api/shoppinglist/generate", null));
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var generatedItem = await context.ShoppingListItems
+            .SingleAsync(item => item.ShoppingListId == setup.ShoppingListId && item.IsGenerated == true);
+
+        Assert.Equal(setup.IngredientId, generatedItem.IngredientId);
+        Assert.Equal(setup.UnitId, generatedItem.UnitId);
+        Assert.Equal(3, generatedItem.Quantity);
+    }
+
+    [Fact]
+    public async Task GenerateShoppingList_ReusesLegacyMatchingItemWithoutCreatingDuplicate()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(factory, client, email);
+        var setup = await CreateMealPlanShoppingListMergeSetupAsync(
+            factory,
+            email,
+            includeLegacyItem: true);
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsync("/api/shoppinglist/generate", null);
+
+        await EnsureSuccessAsync(response);
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var items = await context.ShoppingListItems
+            .Where(item => item.ShoppingListId == setup.ShoppingListId)
+            .ToListAsync();
+
+        var item = Assert.Single(items);
+        Assert.Equal(setup.ItemId, item.Id);
+        Assert.True(item.IsGenerated);
+        Assert.Equal(3, item.Quantity);
+    }
+
+    [Fact]
+    public async Task GenerateShoppingList_CombinesSameIngredientAcrossRecipes()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(factory, client, email);
+        var setup = await CreateTwoRecipeMealPlanSetupAsync(factory, email);
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsync("/api/shoppinglist/generate", null);
+
+        await EnsureSuccessAsync(response);
+
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var generatedItem = await context.ShoppingListItems
+            .SingleAsync(item => item.ShoppingListId == setup.ShoppingListId && item.IsGenerated == true);
+
+        Assert.Equal(setup.IngredientId, generatedItem.IngredientId);
+        Assert.Equal(setup.UnitId, generatedItem.UnitId);
+        Assert.Equal(5, generatedItem.Quantity);
+    }
+
+    [Fact]
+    public async Task GenerateShoppingList_UpdatesGeneratedQuantityWhenMealPlanChanges()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(factory, client, email);
+        var setup = await CreateMealPlanShoppingListMergeSetupAsync(factory, email);
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        await EnsureSuccessAsync(await client.PostAsync("/api/shoppinglist/generate", null));
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var mealPlan = await context.MealPlans.SingleAsync(mealPlan => mealPlan.Id == setup.MealPlanId);
+            mealPlan.Servings = 1;
+            await context.SaveChangesAsync();
+        }
+
+        await EnsureSuccessAsync(await client.PostAsync("/api/shoppinglist/generate", null));
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var generatedItem = await context.ShoppingListItems
+                .SingleAsync(item => item.ShoppingListId == setup.ShoppingListId && item.IsGenerated == true);
+
+            Assert.Equal(1.5m, generatedItem.Quantity);
+        }
+    }
+
+    [Fact]
+    public async Task GenerateShoppingList_RemovesGeneratedItemsWhenMealPlansAreRemoved()
+    {
+        await using var factory = new MealAppApiFactory();
+        var client = factory.CreateClient();
+        var email = CreateEmail();
+
+        await RegisterUserAsync(factory, client, email);
+        var setup = await CreateMealPlanShoppingListMergeSetupAsync(factory, email, includeManualItem: true);
+        var token = await LoginAndGetTokenAsync(client, email);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        await EnsureSuccessAsync(await client.PostAsync("/api/shoppinglist/generate", null));
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var mealPlans = await context.MealPlans
+                .Where(mealPlan => mealPlan.Id == setup.MealPlanId)
+                .ToListAsync();
+            context.MealPlans.RemoveRange(mealPlans);
+            await context.SaveChangesAsync();
+        }
+
+        await EnsureSuccessAsync(await client.PostAsync("/api/shoppinglist/generate", null));
+
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var items = await context.ShoppingListItems
+                .Where(item => item.ShoppingListId == setup.ShoppingListId)
+                .ToListAsync();
+
+            var manualItem = Assert.Single(items);
+            Assert.False(manualItem.IsGenerated == true);
+            Assert.Equal(2, manualItem.Quantity);
+        }
     }
 
     [Fact]
@@ -721,6 +1179,52 @@ public class AuthAndAuthorizationTests
         return $"test.{Guid.NewGuid():N}@example.com";
     }
 
+    private static async Task<int> CreateCategoryAsync(MealAppApiFactory factory)
+    {
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var category = new Category
+        {
+            Name = $"Delete Test Category {Guid.NewGuid():N}",
+            Description = "Created by category delete test."
+        };
+
+        context.Categories.Add(category);
+        await context.SaveChangesAsync();
+
+        return category.Id;
+    }
+
+    private static async Task<CategoryDeleteSetup> CreateCategoryWithRecipesAsync(
+        MealAppApiFactory factory,
+        int recipeCount)
+    {
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var category = new Category
+        {
+            Name = $"Used Category {Guid.NewGuid():N}",
+            Description = "Created by category delete test."
+        };
+
+        for (var index = 0; index < recipeCount; index++)
+        {
+            category.Recipes.Add(new Recipe
+            {
+                Title = $"Recipe Using Category {Guid.NewGuid():N}",
+                Description = "Created by category delete test.",
+                PreparationTimeMinutes = 10,
+                CookingTimeMinutes = 20,
+                Servings = 4
+            });
+        }
+
+        context.Categories.Add(category);
+        await context.SaveChangesAsync();
+
+        return new CategoryDeleteSetup(category.Id);
+    }
+
     private static async Task<ShoppingListSetup> CreateShoppingListSetupAsync(
         MealAppApiFactory factory,
         string email,
@@ -781,7 +1285,9 @@ public class AuthAndAuthorizationTests
 
     private static async Task<ShoppingListSetup> CreateMealPlanShoppingListMergeSetupAsync(
         MealAppApiFactory factory,
-        string email)
+        string email,
+        bool includeManualItem = false,
+        bool includeLegacyItem = false)
     {
         using var scope = factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -835,18 +1341,20 @@ public class AuthAndAuthorizationTests
         {
             UserId = user.Id,
             Name = "Test Shopping List",
-            CreatedAt = DateTime.UtcNow,
-            Items =
-            [
-                new ShoppingListItem
-                {
-                    Ingredient = ingredient,
-                    Unit = unit,
-                    Quantity = 2,
-                    IsChecked = true
-                }
-            ]
+            CreatedAt = DateTime.UtcNow
         };
+
+        if (includeManualItem || includeLegacyItem)
+        {
+            shoppingList.Items.Add(new ShoppingListItem
+            {
+                Ingredient = ingredient,
+                Unit = unit,
+                Quantity = 2,
+                IsChecked = true,
+                IsGenerated = includeLegacyItem ? null : false
+            });
+        }
 
         context.MealPlans.Add(mealPlan);
         context.ShoppingLists.Add(shoppingList);
@@ -856,7 +1364,104 @@ public class AuthAndAuthorizationTests
             shoppingList.Id,
             ingredient.Id,
             unit.Id,
-            shoppingList.Items.First().Id);
+            includeManualItem || includeLegacyItem ? shoppingList.Items.First().Id : 0,
+            mealPlan.Id,
+            recipe.Id);
+    }
+
+    private static async Task<ShoppingListSetup> CreateTwoRecipeMealPlanSetupAsync(
+        MealAppApiFactory factory,
+        string email)
+    {
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var user = await userManager.FindByEmailAsync(email);
+
+        Assert.NotNull(user);
+
+        var category = new Category
+        {
+            Name = $"Test Recipe Category {Guid.NewGuid():N}"
+        };
+        var ingredientCategory = new IngredientCategory
+        {
+            Name = $"Test Ingredient Category {Guid.NewGuid():N}"
+        };
+        var ingredient = new Ingredient
+        {
+            Name = $"Test Ingredient {Guid.NewGuid():N}",
+            IngredientCategory = ingredientCategory
+        };
+        var unit = new Unit
+        {
+            Name = $"Test Unit {Guid.NewGuid():N}",
+            ShortName = "tu"
+        };
+        var firstRecipe = new Recipe
+        {
+            Title = $"First Test Recipe {Guid.NewGuid():N}",
+            Servings = 4,
+            Category = category,
+            RecipeIngredients =
+            [
+                new RecipeIngredient
+                {
+                    Ingredient = ingredient,
+                    Unit = unit,
+                    Quantity = 6
+                }
+            ]
+        };
+        var secondRecipe = new Recipe
+        {
+            Title = $"Second Test Recipe {Guid.NewGuid():N}",
+            Servings = 2,
+            Category = category,
+            RecipeIngredients =
+            [
+                new RecipeIngredient
+                {
+                    Ingredient = ingredient,
+                    Unit = unit,
+                    Quantity = 4
+                }
+            ]
+        };
+        var firstMealPlan = new MealPlan
+        {
+            UserId = user.Id,
+            Recipe = firstRecipe,
+            Servings = 2,
+            PlannedDate = DateTime.UtcNow.Date,
+            CreatedAt = DateTime.UtcNow
+        };
+        var secondMealPlan = new MealPlan
+        {
+            UserId = user.Id,
+            Recipe = secondRecipe,
+            Servings = 1,
+            PlannedDate = DateTime.UtcNow.Date.AddDays(1),
+            CreatedAt = DateTime.UtcNow
+        };
+        var shoppingList = new ShoppingList
+        {
+            UserId = user.Id,
+            Name = "Test Shopping List",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        context.MealPlans.AddRange(firstMealPlan, secondMealPlan);
+        context.ShoppingLists.Add(shoppingList);
+        await context.SaveChangesAsync();
+
+        return new ShoppingListSetup(
+            shoppingList.Id,
+            ingredient.Id,
+            unit.Id,
+            0,
+            firstMealPlan.Id,
+            firstRecipe.Id);
     }
 
     private static async Task<int> AddShoppingListItemAsync(
@@ -875,6 +1480,29 @@ public class AuthAndAuthorizationTests
             UnitId = unitId,
             Quantity = quantity,
             IsChecked = false
+        };
+
+        context.ShoppingListItems.Add(item);
+        await context.SaveChangesAsync();
+
+        return item.Id;
+    }
+
+    private static async Task<int> AddCustomShoppingListItemAsync(
+        MealAppApiFactory factory,
+        int shoppingListId,
+        string customName,
+        decimal? quantity = null)
+    {
+        using var scope = factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var item = new ShoppingListItem
+        {
+            ShoppingListId = shoppingListId,
+            CustomName = customName,
+            Quantity = quantity,
+            IsChecked = false,
+            IsGenerated = false
         };
 
         context.ShoppingListItems.Add(item);
@@ -914,7 +1542,11 @@ public record ShoppingListSetup(
     int ShoppingListId,
     int IngredientId,
     int UnitId,
-    int ItemId);
+    int ItemId,
+    int MealPlanId = 0,
+    int RecipeId = 0);
+
+public record CategoryDeleteSetup(int CategoryId);
 
 public class MealAppApiFactory : WebApplicationFactory<Program>
 {

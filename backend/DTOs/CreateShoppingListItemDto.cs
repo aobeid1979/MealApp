@@ -5,11 +5,14 @@ namespace MealApp.DTOs;
 public class CreateShoppingListItemDto
 {
     [Range(1, int.MaxValue)]
-    public int IngredientId { get; set; }
+    public int? IngredientId { get; set; }
+
+    [StringLength(100)]
+    public string? CustomName { get; set; }
 
     [Range(0.01, double.MaxValue)]
-    public decimal Quantity { get; set; }
+    public decimal? Quantity { get; set; }
 
     [Range(1, int.MaxValue)]
-    public int UnitId { get; set; }
+    public int? UnitId { get; set; }
 }

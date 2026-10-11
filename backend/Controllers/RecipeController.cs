@@ -1,6 +1,7 @@
 using MealApp.Data;
 using MealApp.DTOs;
 using MealApp.Models;
+using MealApp.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,32 +13,18 @@ namespace MealApp.Controllers;
 public class RecipeController : ApiControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly RecipeReadService _reads;
 
-    public RecipeController(ApplicationDbContext context)
+    public RecipeController(ApplicationDbContext context, RecipeReadService reads)
     {
         _context = context;
+        _reads = reads;
     }
 
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] int? categoryId, [FromQuery] string? search)
     {
-        var query = _context.Recipes
-            .AsQueryable();
-
-        if (categoryId.HasValue)
-        {
-            query = query.Where(recipe => recipe.CategoryId == categoryId.Value);
-        }
-
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            var normalizedSearch = search.ToLower();
-
-            query = query.Where(recipe =>
-                recipe.Title.ToLower().Contains(normalizedSearch)
-                || (recipe.Description != null
-                    && recipe.Description.ToLower().Contains(normalizedSearch)));
-        }
+        var query = _reads.Search(search, categoryId);
 
         var recipes = await query
             .Select(recipe => new RecipeResponseDto
@@ -89,54 +76,7 @@ public class RecipeController : ApiControllerBase
     [HttpGet("{id}/details")]
     public async Task<IActionResult> GetDetails(int id)
     {
-        var recipe = await _context.Recipes
-            .Where(recipe => recipe.Id == id)
-            .Select(recipe => new RecipeDetailsResponseDto
-            {
-                Id = recipe.Id,
-                Title = recipe.Title,
-                Description = recipe.Description,
-                ImageUrl = recipe.ImageUrl,
-                PreparationTimeMinutes = recipe.PreparationTimeMinutes,
-                CookingTimeMinutes = recipe.CookingTimeMinutes,
-                Servings = recipe.Servings,
-                CategoryId = recipe.CategoryId,
-                CategoryName = recipe.Category != null ? recipe.Category.Name : null,
-                Ingredients = recipe.RecipeIngredients
-                    .OrderBy(recipeIngredient => recipeIngredient.Ingredient != null
-                        ? recipeIngredient.Ingredient.Name
-                        : null)
-                    .Select(recipeIngredient => new RecipeDetailsIngredientResponseDto
-                    {
-                        IngredientId = recipeIngredient.IngredientId,
-                        IngredientName = recipeIngredient.Ingredient != null ? recipeIngredient.Ingredient.Name : null,
-                        Quantity = recipeIngredient.Quantity,
-                        UnitId = recipeIngredient.UnitId,
-                        UnitName = recipeIngredient.Unit != null ? recipeIngredient.Unit.Name : null,
-                        UnitShortName = recipeIngredient.Unit != null ? recipeIngredient.Unit.ShortName : null
-                    })
-                    .ToList(),
-                Steps = recipe.RecipeSteps
-                    .OrderBy(step => step.StepNumber)
-                    .Select(step => new RecipeStepResponseDto
-                    {
-                        Id = step.Id,
-                        RecipeId = step.RecipeId,
-                        StepNumber = step.StepNumber,
-                        Instruction = step.Instruction
-                    })
-                    .ToList(),
-                Tools = recipe.RecipeTools
-                    .OrderBy(tool => tool.Name)
-                    .Select(tool => new RecipeToolResponseDto
-                    {
-                        Id = tool.Id,
-                        RecipeId = tool.RecipeId,
-                        Name = tool.Name
-                    })
-                    .ToList()
-            })
-            .FirstOrDefaultAsync();
+        var recipe = await _reads.GetDetailsAsync(id);
 
         if (recipe is null)
         {

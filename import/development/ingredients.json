@@ -1,0 +1,104 @@
+{
+  "items": [
+    {
+      "name": "Spaghetti",
+      "ingredientCategory": "Grains and Pasta"
+    },
+    {
+      "name": "Brown Rice",
+      "ingredientCategory": "Grains and Pasta"
+    },
+    {
+      "name": "Rolled Oats",
+      "ingredientCategory": "Grains and Pasta"
+    },
+    {
+      "name": "Penne",
+      "ingredientCategory": "Grains and Pasta"
+    },
+    {
+      "name": "Couscous",
+      "ingredientCategory": "Grains and Pasta"
+    },
+    {
+      "name": "Chicken Breast",
+      "ingredientCategory": "Meat and Poultry"
+    },
+    {
+      "name": "Turkey Breast",
+      "ingredientCategory": "Meat and Poultry"
+    },
+    {
+      "name": "Tomato",
+      "ingredientCategory": "Vegetables"
+    },
+    {
+      "name": "Cucumber",
+      "ingredientCategory": "Vegetables"
+    },
+    {
+      "name": "Carrot",
+      "ingredientCategory": "Vegetables"
+    },
+    {
+      "name": "Spinach",
+      "ingredientCategory": "Vegetables"
+    },
+    {
+      "name": "Onion",
+      "ingredientCategory": "Vegetables"
+    },
+    {
+      "name": "Garlic",
+      "ingredientCategory": "Vegetables"
+    },
+    {
+      "name": "Broccoli",
+      "ingredientCategory": "Vegetables"
+    },
+    {
+      "name": "Greek Yogurt",
+      "ingredientCategory": "Dairy"
+    },
+    {
+      "name": "Parmesan Cheese",
+      "ingredientCategory": "Dairy"
+    },
+    {
+      "name": "Milk",
+      "ingredientCategory": "Dairy"
+    },
+    {
+      "name": "Feta Cheese",
+      "ingredientCategory": "Dairy"
+    },
+    {
+      "name": "Olive Oil",
+      "ingredientCategory": "Pantry"
+    },
+    {
+      "name": "Chickpeas",
+      "ingredientCategory": "Pantry"
+    },
+    {
+      "name": "Tomato Sauce",
+      "ingredientCategory": "Pantry"
+    },
+    {
+      "name": "Black Pepper",
+      "ingredientCategory": "Pantry"
+    },
+    {
+      "name": "Lemon",
+      "ingredientCategory": "Fruit"
+    },
+    {
+      "name": "Banana",
+      "ingredientCategory": "Fruit"
+    },
+    {
+      "name": "Mixed Berries",
+      "ingredientCategory": "Fruit"
+    }
+  ]
+}

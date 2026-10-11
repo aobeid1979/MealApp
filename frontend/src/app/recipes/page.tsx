@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getValidToken, setRedirectPath } from "@/lib/auth";
+import { loadFavoriteRecipeIds } from "@/lib/favorites";
 
 type Recipe = {
   id: number;
@@ -17,6 +18,12 @@ type Recipe = {
   categoryName: string | null;
 };
 
+type Category = {
+  id: number;
+  name: string;
+  description: string | null;
+};
+
 type ApiResponse<T> = {
   isSuccess: boolean;
   result: T;
@@ -26,18 +33,104 @@ type ApiResponse<T> = {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
+function getCategoryIdFromUrl() {
+  const categoryId = new URLSearchParams(window.location.search).get("categoryId");
+  const parsedCategoryId = Number(categoryId);
+
+  return categoryId && Number.isInteger(parsedCategoryId) && parsedCategoryId > 0
+    ? parsedCategoryId
+    : null;
+}
+
 export default function RecipesPage() {
   const router = useRouter();
   const pathname = usePathname();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [categoryErrorMessage, setCategoryErrorMessage] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [searchText, setSearchText] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [isCategoryFilterReady, setIsCategoryFilterReady] = useState(false);
+  const [favoriteRecipeIds, setFavoriteRecipeIds] = useState<Set<number>>(new Set());
+  const [pendingFavoriteRecipeId, setPendingFavoriteRecipeId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const syncCategoryFilter = window.setTimeout(() => {
+      setSelectedCategoryId(getCategoryIdFromUrl());
+      setIsCategoryFilterReady(true);
+    }, 0);
+
+    return () => window.clearTimeout(syncCategoryFilter);
+  }, []);
+
+  useEffect(() => {
+    async function fetchCategories() {
+      try {
+        setCategoryErrorMessage(null);
+
+        const response = await fetch(`${API_URL}/api/category`);
+        const data = (await response.json()) as ApiResponse<Category[]>;
+
+        if (!data.isSuccess || !response.ok) {
+          throw new Error(data.errorMessages?.[0] ?? "Failed to load categories.");
+        }
+
+        setCategories(data.result);
+      } catch (error) {
+        setCategoryErrorMessage(
+          error instanceof Error ? error.message : "Failed to load categories."
+        );
+      }
+    }
+
+    fetchCategories();
+  }, []);
+
+  useEffect(() => {
+    async function fetchFavorites() {
+      const token = getValidToken();
+
+      if (!token) {
+        setFavoriteRecipeIds(new Set());
+        return;
+      }
+
+      try {
+        setFavoriteRecipeIds(await loadFavoriteRecipeIds(token));
+      } catch (error) {
+        setMessage(
+          error instanceof Error ? error.message : "Favorite recipes could not be loaded."
+        );
+      }
+    }
+
+    fetchFavorites();
+  }, []);
 
   useEffect(() => {
     async function fetchRecipes() {
       try {
-        const response = await fetch(`${API_URL}/api/recipe`);
+        setIsLoading(true);
+        setErrorMessage(null);
+
+        const queryParams = new URLSearchParams();
+        const trimmedSearchText = searchText.trim();
+
+        if (trimmedSearchText) {
+          queryParams.set("search", trimmedSearchText);
+        }
+
+        if (selectedCategoryId) {
+          queryParams.set("categoryId", selectedCategoryId.toString());
+        }
+
+        const queryString = queryParams.toString();
+        const response = await fetch(
+          `${API_URL}/api/recipe${queryString ? `?${queryString}` : ""}`
+        );
         const data = (await response.json()) as ApiResponse<Recipe[]>;
 
         if (!data.isSuccess || !response.ok) {
@@ -54,11 +147,39 @@ export default function RecipesPage() {
       }
     }
 
-    fetchRecipes();
-  }, []);
+    if (!isCategoryFilterReady) {
+      return;
+    }
 
-  async function handleFavorite(recipeId: number) {
+    const debounceTimer = window.setTimeout(fetchRecipes, 400);
+
+    return () => window.clearTimeout(debounceTimer);
+  }, [isCategoryFilterReady, searchText, selectedCategoryId]);
+
+  function handleSearchChange(value: string) {
+    setSearchText(value);
+    setIsLoading(true);
+  }
+
+  function handleCategoryChange(categoryId: number | null) {
+    setSelectedCategoryId(categoryId);
+    setIsLoading(true);
+
+    const queryParams = new URLSearchParams(window.location.search);
+
+    if (categoryId) {
+      queryParams.set("categoryId", categoryId.toString());
+    } else {
+      queryParams.delete("categoryId");
+    }
+
+    const queryString = queryParams.toString();
+    window.history.pushState(null, "", queryString ? `/recipes?${queryString}` : "/recipes");
+  }
+
+  async function handleToggleFavorite(recipeId: number) {
     setMessage(null);
+    setPendingFavoriteRecipeId(recipeId);
 
     try {
       const token = getValidToken();
@@ -69,10 +190,11 @@ export default function RecipesPage() {
         return;
       }
 
+      const isFavorite = favoriteRecipeIds.has(recipeId);
       const response = await fetch(
         `${API_URL}/api/favoriterecipe/${recipeId}`,
         {
-          method: "POST",
+          method: isFavorite ? "DELETE" : "POST",
           headers: {
             Authorization: "Bearer " + token
           }
@@ -82,14 +204,32 @@ export default function RecipesPage() {
       const data = (await response.json()) as ApiResponse<unknown>;
 
       if (!data.isSuccess || !response.ok) {
-        throw new Error(data.errorMessages?.[0] ?? "Recipe could not be added to favorites.");
+        throw new Error(
+          data.errorMessages?.[0]
+          ?? (isFavorite
+            ? "Recipe could not be removed from favorites."
+            : "Recipe could not be added to favorites.")
+        );
       }
 
-      setMessage("Recipe added to favorites.");
+      setFavoriteRecipeIds((currentFavoriteRecipeIds) => {
+        const nextFavoriteRecipeIds = new Set(currentFavoriteRecipeIds);
+
+        if (isFavorite) {
+          nextFavoriteRecipeIds.delete(recipeId);
+        } else {
+          nextFavoriteRecipeIds.add(recipeId);
+        }
+
+        return nextFavoriteRecipeIds;
+      });
+      setMessage(isFavorite ? "Recipe removed from favorites." : "Recipe saved.");
     } catch (error) {
       setMessage(
-        error instanceof Error ? error.message : "Recipe could not be added to favorites."
+        error instanceof Error ? error.message : "Favorite status could not be updated."
       );
+    } finally {
+      setPendingFavoriteRecipeId(null);
     }
   }
 
@@ -113,8 +253,54 @@ export default function RecipesPage() {
             id="search"
             type="search"
             placeholder="Search by name"
+            value={searchText}
+            onChange={(event) => handleSearchChange(event.target.value)}
             className="form-input"
           />
+        </div>
+      </div>
+
+      <div className="app-card p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-slate-950">
+              Categories
+            </p>
+            <p className="mt-1 text-sm text-slate-600">
+              {selectedCategoryId
+                ? `Showing ${
+                    categories.find((category) => category.id === selectedCategoryId)?.name
+                    ?? "selected category"
+                  } recipes`
+                : "Showing all recipes"}
+            </p>
+          </div>
+          {categoryErrorMessage && (
+            <p className="text-sm text-red-700">{categoryErrorMessage}</p>
+          )}
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => handleCategoryChange(null)}
+            className={selectedCategoryId === null ? "primary-button" : "secondary-button"}
+          >
+            All recipes
+          </button>
+
+          {categories.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              onClick={() => handleCategoryChange(category.id)}
+              className={
+                selectedCategoryId === category.id ? "primary-button" : "secondary-button"
+              }
+            >
+              {category.name}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -138,14 +324,41 @@ export default function RecipesPage() {
         <div className="flex min-h-[35vh] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center">
           <div className="max-w-md">
             <h2 className="text-xl font-semibold text-slate-900">
-              No recipes yet. Add your first recipe.
+              {searchText.trim() || selectedCategoryId
+                ? "No recipes found."
+                : "No recipes yet. Add your first recipe."}
             </h2>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              Recipes created from the Admin dashboard will appear here for everyone to browse.
+              {searchText.trim() || selectedCategoryId
+                ? "Try another search term, choose another category, or show all recipes."
+                : "Recipes created from the Admin dashboard will appear here for everyone to browse."}
             </p>
-            <Link href="/admin" className="primary-button mt-6 inline-flex">
-              Go to Admin Dashboard
-            </Link>
+            {searchText.trim() || selectedCategoryId ? (
+              <div className="mt-6 flex flex-wrap justify-center gap-3">
+                {searchText.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => handleSearchChange("")}
+                    className="secondary-button"
+                  >
+                    Clear Search
+                  </button>
+                )}
+                {selectedCategoryId && (
+                  <button
+                    type="button"
+                    onClick={() => handleCategoryChange(null)}
+                    className="primary-button"
+                  >
+                    All recipes
+                  </button>
+                )}
+              </div>
+            ) : (
+              <Link href="/admin" className="primary-button mt-6 inline-flex">
+                Go to Admin Dashboard
+              </Link>
+            )}
           </div>
         </div>
       )}
@@ -156,7 +369,9 @@ export default function RecipesPage() {
             <RecipeCard
               key={recipe.id}
               recipe={recipe}
-              onFavorite={handleFavorite}
+              isFavorite={favoriteRecipeIds.has(recipe.id)}
+              isFavoritePending={pendingFavoriteRecipeId === recipe.id}
+              onToggleFavorite={handleToggleFavorite}
             />
           ))}
         </div>
@@ -185,10 +400,14 @@ function RecipesLoadingState() {
 
 function RecipeCard({
   recipe,
-  onFavorite
+  isFavorite,
+  isFavoritePending,
+  onToggleFavorite
 }: {
   recipe: Recipe;
-  onFavorite: (recipeId: number) => void;
+  isFavorite: boolean;
+  isFavoritePending: boolean;
+  onToggleFavorite: (recipeId: number) => void;
 }) {
   const hasValidImageUrl =
     recipe.imageUrl !== null
@@ -243,10 +462,11 @@ function RecipeCard({
         </Link>
         <button
           type="button"
-          onClick={() => onFavorite(recipe.id)}
-          className="secondary-button w-full"
+          onClick={() => onToggleFavorite(recipe.id)}
+          disabled={isFavoritePending}
+          className={isFavorite ? "primary-button w-full" : "secondary-button w-full"}
         >
-          Favorite
+          {isFavoritePending ? "Saving..." : isFavorite ? "♥ Saved" : "♡ Save"}
         </button>
       </div>
     </article>

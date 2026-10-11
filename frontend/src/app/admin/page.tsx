@@ -72,6 +72,10 @@ type ApiResponse<T> = {
   statusCode: number;
 };
 
+type CategoryDeleteConflictResult = {
+  recipeCount?: number;
+};
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 const categoriesUrl = `${API_URL}/api/category`;
@@ -420,14 +424,26 @@ export default function AdminPage() {
         }
       });
 
-      const data = (await response.json()) as ApiResponse<unknown>;
+      const data = (await response.json()) as ApiResponse<CategoryDeleteConflictResult | null>;
 
       if (!data.isSuccess || !response.ok) {
+        const recipeCount = data.result?.recipeCount;
+
+        if (response.status === 409 && typeof recipeCount === "number") {
+          throw new Error(
+            `This category cannot be deleted because ${recipeCount} ${
+              recipeCount === 1 ? "recipe is" : "recipes are"
+            } using it.`
+          );
+        }
+
         throw new Error(data.errorMessages?.[0] ?? "Category could not be deleted.");
       }
 
       setMessage("Category deleted successfully.");
-      await loadCategories();
+      setCategories((currentCategories) =>
+        currentCategories.filter((category) => category.id !== categoryId)
+      );
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Category could not be deleted."

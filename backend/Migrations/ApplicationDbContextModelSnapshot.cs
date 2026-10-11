@@ -17,7 +17,7 @@ namespace MealApp.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.26")
+                .HasAnnotation("ProductVersion", "8.0.31")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -116,7 +116,7 @@ namespace MealApp.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Categories");
+                    b.ToTable("Categories", (string)null);
                 });
 
             modelBuilder.Entity("MealApp.Models.FavoriteRecipe", b =>
@@ -144,7 +144,7 @@ namespace MealApp.Migrations
                     b.HasIndex("UserId", "RecipeId")
                         .IsUnique();
 
-                    b.ToTable("FavoriteRecipes");
+                    b.ToTable("FavoriteRecipes", (string)null);
                 });
 
             modelBuilder.Entity("MealApp.Models.Ingredient", b =>
@@ -172,7 +172,7 @@ namespace MealApp.Migrations
 
                     b.HasIndex("IngredientCategoryId");
 
-                    b.ToTable("Ingredients");
+                    b.ToTable("Ingredients", (string)null);
                 });
 
             modelBuilder.Entity("MealApp.Models.IngredientCategory", b =>
@@ -192,7 +192,7 @@ namespace MealApp.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("IngredientCategories");
+                    b.ToTable("IngredientCategories", (string)null);
                 });
 
             modelBuilder.Entity("MealApp.Models.MealPlan", b =>
@@ -225,7 +225,7 @@ namespace MealApp.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("MealPlans");
+                    b.ToTable("MealPlans", (string)null);
                 });
 
             modelBuilder.Entity("MealApp.Models.Recipe", b =>
@@ -262,7 +262,7 @@ namespace MealApp.Migrations
 
                     b.HasIndex("CategoryId");
 
-                    b.ToTable("Recipes");
+                    b.ToTable("Recipes", (string)null);
                 });
 
             modelBuilder.Entity("MealApp.Models.RecipeIngredient", b =>
@@ -294,7 +294,7 @@ namespace MealApp.Migrations
 
                     b.HasIndex("UnitId");
 
-                    b.ToTable("RecipeIngredients");
+                    b.ToTable("RecipeIngredients", (string)null);
                 });
 
             modelBuilder.Entity("MealApp.Models.RecipeStep", b =>
@@ -319,7 +319,7 @@ namespace MealApp.Migrations
 
                     b.HasIndex("RecipeId");
 
-                    b.ToTable("RecipeSteps");
+                    b.ToTable("RecipeSteps", (string)null);
                 });
 
             modelBuilder.Entity("MealApp.Models.RecipeTool", b =>
@@ -341,7 +341,7 @@ namespace MealApp.Migrations
 
                     b.HasIndex("RecipeId");
 
-                    b.ToTable("RecipeTools");
+                    b.ToTable("RecipeTools", (string)null);
                 });
 
             modelBuilder.Entity("MealApp.Models.ShoppingList", b =>
@@ -367,7 +367,7 @@ namespace MealApp.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("ShoppingLists");
+                    b.ToTable("ShoppingLists", (string)null);
                 });
 
             modelBuilder.Entity("MealApp.Models.ShoppingListItem", b =>
@@ -378,20 +378,27 @@ namespace MealApp.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("IngredientId")
+                    b.Property<string>("CustomName")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int?>("IngredientId")
                         .HasColumnType("int");
 
                     b.Property<bool>("IsChecked")
                         .HasColumnType("bit");
 
-                    b.Property<decimal>("Quantity")
+                    b.Property<bool?>("IsGenerated")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("Quantity")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("ShoppingListId")
                         .HasColumnType("int");
 
-                    b.Property<int>("UnitId")
+                    b.Property<int?>("UnitId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
@@ -402,7 +409,7 @@ namespace MealApp.Migrations
 
                     b.HasIndex("UnitId");
 
-                    b.ToTable("ShoppingListItems");
+                    b.ToTable("ShoppingListItems", (string)null);
                 });
 
             modelBuilder.Entity("MealApp.Models.Unit", b =>
@@ -423,7 +430,7 @@ namespace MealApp.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Units");
+                    b.ToTable("Units", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -683,9 +690,7 @@ namespace MealApp.Migrations
                 {
                     b.HasOne("MealApp.Models.Ingredient", "Ingredient")
                         .WithMany()
-                        .HasForeignKey("IngredientId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("IngredientId");
 
                     b.HasOne("MealApp.Models.ShoppingList", "ShoppingList")
                         .WithMany("Items")
@@ -695,9 +700,7 @@ namespace MealApp.Migrations
 
                     b.HasOne("MealApp.Models.Unit", "Unit")
                         .WithMany()
-                        .HasForeignKey("UnitId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("UnitId");
 
                     b.Navigation("Ingredient");
 

@@ -169,14 +169,18 @@ export default function Home() {
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {categories.slice(0, 8).map((category) => (
-            <div key={category.id} className="app-card p-5">
+            <Link
+              key={category.id}
+              href={`/recipes?categoryId=${category.id}`}
+              className="app-card interactive-card block p-5"
+            >
               <h3 className="text-lg font-semibold tracking-normal text-slate-950">
                 {category.name}
               </h3>
               <p className="mt-2 text-sm leading-6 text-slate-600">
                 {category.description ?? "Recipes ready to explore."}
               </p>
-            </div>
+            </Link>
           ))}
         </div>
       </section>

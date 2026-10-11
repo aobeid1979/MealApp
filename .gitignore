@@ -4,6 +4,9 @@ bin/
 obj/
 .dotnet/
 test-build-output/
+# Custom compile/publish verification output
+/backend/*build*output/
+data-protection-keys/
 
 # Node / Next.js
 node_modules/
@@ -11,8 +14,12 @@ node_modules/
 
 # Env files
 .env
-.env.local
-.env*.local
+.env.*
+!.env.example
+!.env.*.example
+
+# Local reference dataset (not part of the application checkpoint)
+/import/LivsmedelsDB_202609111026.xlsx
 
 # Local secrets / certificates
 secrets.json

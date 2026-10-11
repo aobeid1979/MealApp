@@ -1,22 +1,27 @@
 using MealApp.Services.Models;
-using MailKit.Net.Smtp;
-using MailKit.Security;
 using Microsoft.Extensions.Options;
-using MimeKit;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Net.Mail;
 using System.Text;
+using System.Text.Json.Serialization;
 
 namespace MealApp.Services;
 
 public class SupportRequestService : ISupportRequestService
 {
-    private readonly SupportEmailOptions _options;
+    private const string BrevoTransactionalEmailUrl = "https://api.brevo.com/v3/smtp/email";
+
+    private readonly HttpClient _httpClient;
+    private readonly BrevoEmailOptions _options;
     private readonly ILogger<SupportRequestService> _logger;
 
     public SupportRequestService(
-        IOptions<SupportEmailOptions> options,
+        HttpClient httpClient,
+        IOptions<BrevoEmailOptions> options,
         ILogger<SupportRequestService> logger)
     {
+        _httpClient = httpClient;
         _options = options.Value;
         _logger = logger;
     }
@@ -25,23 +30,38 @@ public class SupportRequestService : ISupportRequestService
     {
         ValidateOptions();
 
-        var message = CreateMessage(supportRequest);
+        var payload = CreatePayload(supportRequest);
 
         try
         {
-            using var smtpClient = new MailKit.Net.Smtp.SmtpClient();
+            using var request = new HttpRequestMessage(HttpMethod.Post, BrevoTransactionalEmailUrl);
+            request.Headers.Add("api-key", _options.ApiKey);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            request.Content = JsonContent.Create(payload);
 
-            await smtpClient.ConnectAsync(
-                _options.Host,
-                _options.Port,
-                SecureSocketOptions.StartTls);
-            await smtpClient.AuthenticateAsync(_options.Username, _options.Password);
-            await smtpClient.SendAsync(message);
-            await smtpClient.DisconnectAsync(true);
+            var response = await _httpClient.SendAsync(request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var responseBody = await response.Content.ReadAsStringAsync();
+
+                _logger.LogError(
+                    "Brevo support email request failed with status {StatusCode}. Response: {ResponseBody}",
+                    response.StatusCode,
+                    responseBody);
+
+                throw new SupportRequestEmailException(
+                    "Support request could not be sent.");
+            }
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "Failed to send support request email.");
+            if (exception is SupportRequestEmailException)
+            {
+                throw;
+            }
+
+            _logger.LogError(exception, "Failed to send support request email through Brevo.");
 
             throw new SupportRequestEmailException(
                 "Support request could not be sent.",
@@ -49,34 +69,34 @@ public class SupportRequestService : ISupportRequestService
         }
     }
 
-    private MimeMessage CreateMessage(SupportRequest supportRequest)
+    private BrevoEmailPayload CreatePayload(SupportRequest supportRequest)
     {
-        var message = new MimeMessage();
-        message.From.Add(MailboxAddress.Parse(_options.FromEmail));
-        message.To.Add(MailboxAddress.Parse(_options.ToEmail));
-        message.Subject = $"[MealList Support] {supportRequest.Title}";
+        var payload = new BrevoEmailPayload
+        {
+            Sender = new BrevoEmailContact(_options.SenderEmail, _options.SenderName),
+            To = [new BrevoEmailContact(_options.ToEmail)],
+            Subject = $"[MealList Support] {supportRequest.Title}",
+            TextContent = CreateTextBody(supportRequest)
+        };
 
         if (!string.IsNullOrWhiteSpace(supportRequest.Email) && IsValidEmail(supportRequest.Email))
         {
-            message.ReplyTo.Add(MailboxAddress.Parse(supportRequest.Email));
+            payload.ReplyTo = new BrevoEmailContact(
+                supportRequest.Email,
+                string.IsNullOrWhiteSpace(supportRequest.Name) ? null : supportRequest.Name);
         }
-
-        var bodyBuilder = new BodyBuilder
-        {
-            TextBody = CreateTextBody(supportRequest)
-        };
 
         if (supportRequest.Attachment is not null)
         {
-            bodyBuilder.Attachments.Add(
-                supportRequest.Attachment.FileName,
-                supportRequest.Attachment.Content,
-                ContentType.Parse(supportRequest.Attachment.ContentType));
+            payload.Attachment =
+            [
+                new BrevoEmailAttachment(
+                    supportRequest.Attachment.FileName,
+                    Convert.ToBase64String(supportRequest.Attachment.Content))
+            ];
         }
 
-        message.Body = bodyBuilder.ToMessageBody();
-
-        return message;
+        return payload;
     }
 
     private static string CreateTextBody(SupportRequest supportRequest)
@@ -108,17 +128,15 @@ public class SupportRequestService : ISupportRequestService
 
     private void ValidateOptions()
     {
-        if (string.IsNullOrWhiteSpace(_options.Host)
-            || _options.Port <= 0
-            || string.IsNullOrWhiteSpace(_options.Username)
-            || string.IsNullOrWhiteSpace(_options.Password)
-            || string.IsNullOrWhiteSpace(_options.FromEmail)
+        if (string.IsNullOrWhiteSpace(_options.ApiKey)
+            || string.IsNullOrWhiteSpace(_options.SenderEmail)
+            || string.IsNullOrWhiteSpace(_options.SenderName)
             || string.IsNullOrWhiteSpace(_options.ToEmail))
         {
-            _logger.LogError("Support email configuration is incomplete.");
+            _logger.LogError("Brevo support email configuration is incomplete.");
 
             throw new SupportRequestEmailException(
-                "Support email configuration is incomplete.");
+                "Brevo support email configuration is incomplete.");
         }
     }
 
@@ -135,4 +153,37 @@ public class SupportRequestService : ISupportRequestService
             return false;
         }
     }
+
+    private class BrevoEmailPayload
+    {
+        [JsonPropertyName("sender")]
+        public BrevoEmailContact Sender { get; set; } = new(string.Empty);
+
+        [JsonPropertyName("to")]
+        public List<BrevoEmailContact> To { get; set; } = [];
+
+        [JsonPropertyName("replyTo")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public BrevoEmailContact? ReplyTo { get; set; }
+
+        [JsonPropertyName("subject")]
+        public string Subject { get; set; } = string.Empty;
+
+        [JsonPropertyName("textContent")]
+        public string TextContent { get; set; } = string.Empty;
+
+        [JsonPropertyName("attachment")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<BrevoEmailAttachment>? Attachment { get; set; }
+    }
+
+    private record BrevoEmailContact(
+        [property: JsonPropertyName("email")] string Email,
+        [property: JsonPropertyName("name")]
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        string? Name = null);
+
+    private record BrevoEmailAttachment(
+        [property: JsonPropertyName("name")] string Name,
+        [property: JsonPropertyName("content")] string Content);
 }

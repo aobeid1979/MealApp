@@ -72,6 +72,10 @@ AdminUser__Email=admin@example.com
 AdminUser__Password=replace-with-a-strong-admin-password
 Cors__AllowedOrigins__0=https://your-frontend-domain.com
 SeedSampleData=false
+BrevoEmail__ApiKey=replace-with-your-private-brevo-api-key
+BrevoEmail__SenderEmail=verified-sender@example.com
+BrevoEmail__SenderName=your-support-sender-name
+BrevoEmail__ToEmail=your-support-recipient@example.com
 ```
 
 ASP.NET Core loads `appsettings.Production.json` when `ASPNETCORE_ENVIRONMENT=Production`,
@@ -79,6 +83,25 @@ then environment variables override those placeholder values.
 
 Sample recipe data is enabled by default only in local Development.
 In Production, set `SeedSampleData=true` only if you intentionally want demo data seeded.
+
+## Support Email (Brevo)
+
+Support uses Brevo's transactional HTTPS API, not Gmail SMTP. Production startup
+requires all four `BrevoEmail__*` variables shown above, even if Support is not used.
+Verify the sender email or its domain in Brevo. Set the recipient to the intended
+support mailbox on the host; the addresses above are placeholders only.
+
+For local development, configure the same values using User Secrets from `backend`:
+
+```powershell
+dotnet user-secrets set "BrevoEmail:ApiKey" "replace-with-your-private-brevo-api-key"
+dotnet user-secrets set "BrevoEmail:SenderEmail" "verified-sender@example.com"
+dotnet user-secrets set "BrevoEmail:SenderName" "your-support-sender-name"
+dotnet user-secrets set "BrevoEmail:ToEmail" "your-support-recipient@example.com"
+```
+
+Never commit the real API key, local environment files, or User Secrets.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for production setup and credential safety checks.
 
 ## Frontend API URL
 

@@ -48,6 +48,8 @@ public class ShoppingListController : ApiControllerBase
                     && mealPlan.PlannedDate <= to.Value);
         }
 
+        var shoppingList = await GetOrCreateShoppingList(userId);
+
         var mealPlans = await mealPlanQuery
             .Include(mealPlan => mealPlan.Recipe)
                 .ThenInclude(recipe => recipe!.RecipeIngredients)
@@ -55,25 +57,23 @@ public class ShoppingListController : ApiControllerBase
 
         if (mealPlans.Count == 0)
         {
-            return BadRequest(new
-            {
-                Message = "No meal plans found for this user."
-            });
+            await SyncGeneratedShoppingListItems(shoppingList.Id, userId, []);
+            await _context.SaveChangesAsync();
+
+            return Ok(await GetShoppingListResponseDto(shoppingList.Id, userId));
         }
 
         var mergedItems = BuildMergedShoppingListItems(mealPlans);
 
         if (mergedItems.Count == 0)
         {
-            return BadRequest(new
-            {
-                Message = "No recipe ingredients found in this user's meal plans."
-            });
+            await SyncGeneratedShoppingListItems(shoppingList.Id, userId, []);
+            await _context.SaveChangesAsync();
+
+            return Ok(await GetShoppingListResponseDto(shoppingList.Id, userId));
         }
 
-        var shoppingList = await GetOrCreateShoppingList(userId);
-
-        await AddOrMergeShoppingListItems(shoppingList.Id, userId, mergedItems);
+        await SyncGeneratedShoppingListItems(shoppingList.Id, userId, mergedItems);
         await _context.SaveChangesAsync();
 
         var response = await GetShoppingListResponseDto(shoppingList.Id, userId);
@@ -131,21 +131,21 @@ public class ShoppingListController : ApiControllerBase
 
         var mergedItems = BuildMergedShoppingListItems(mealPlans);
 
-        if (mergedItems.Count == 0)
-        {
-            return BadRequest(new
-            {
-                Message = "No recipe ingredients found in this user's meal plans."
-            });
-        }
-
         var shoppingList = await GetOrCreateShoppingList(
             userId,
             !string.IsNullOrWhiteSpace(shoppingListName)
                 ? shoppingListName
                 : null);
 
-        await AddOrMergeShoppingListItems(shoppingList.Id, userId, mergedItems);
+        if (mergedItems.Count == 0)
+        {
+            await SyncGeneratedShoppingListItems(shoppingList.Id, userId, []);
+            await _context.SaveChangesAsync();
+
+            return Ok(await GetShoppingListResponseDto(shoppingList.Id, userId));
+        }
+
+        await SyncGeneratedShoppingListItems(shoppingList.Id, userId, mergedItems);
         await _context.SaveChangesAsync();
 
         var response = await GetShoppingListResponseDto(shoppingList.Id, userId);
@@ -180,12 +180,14 @@ public class ShoppingListController : ApiControllerBase
                             : null)
                     .ThenBy(item => item.Ingredient != null
                         ? item.Ingredient.Name
-                        : null)
+                        : item.CustomName)
                     .Select(item => new ShoppingListItemResponseDto
                     {
                         Id = item.Id,
                         IngredientId = item.IngredientId,
                         IngredientName = item.Ingredient != null ? item.Ingredient.Name : null,
+                        CustomName = item.CustomName,
+                        ItemName = item.Ingredient != null ? item.Ingredient.Name : item.CustomName,
                         IngredientCategoryId = item.Ingredient != null
                             && item.Ingredient.IngredientCategory != null
                                 ? item.Ingredient.IngredientCategory.Id
@@ -198,7 +200,8 @@ public class ShoppingListController : ApiControllerBase
                         UnitId = item.UnitId,
                         UnitName = item.Unit != null ? item.Unit.Name : null,
                         UnitShortName = item.Unit != null ? item.Unit.ShortName : null,
-                        IsChecked = item.IsChecked
+                        IsChecked = item.IsChecked,
+                        IsGenerated = item.IsGenerated == true
                     })
                     .ToList()
             })
@@ -260,6 +263,8 @@ public class ShoppingListController : ApiControllerBase
                 Id = item.Id,
                 IngredientId = item.IngredientId,
                 IngredientName = item.Ingredient != null ? item.Ingredient.Name : null,
+                CustomName = item.CustomName,
+                ItemName = item.Ingredient != null ? item.Ingredient.Name : item.CustomName,
                 IngredientCategoryId = item.Ingredient != null
                     && item.Ingredient.IngredientCategory != null
                         ? item.Ingredient.IngredientCategory.Id
@@ -272,7 +277,8 @@ public class ShoppingListController : ApiControllerBase
                 UnitId = item.UnitId,
                 UnitName = item.Unit != null ? item.Unit.Name : null,
                 UnitShortName = item.Unit != null ? item.Unit.ShortName : null,
-                IsChecked = item.IsChecked
+                IsChecked = item.IsChecked,
+                IsGenerated = item.IsGenerated == true
             })
             .ToListAsync();
 
@@ -288,7 +294,7 @@ public class ShoppingListController : ApiControllerBase
                 CategoryId = group.Key.CategoryId,
                 CategoryName = group.Key.CategoryName,
                 Items = group
-                    .OrderBy(item => item.IngredientName)
+                    .OrderBy(item => item.IngredientName ?? item.CustomName)
                     .ToList()
             })
             .ToList();
@@ -486,7 +492,20 @@ public class ShoppingListController : ApiControllerBase
             });
         }
 
-        if (createShoppingListItemDto.Quantity <= 0)
+        var customName = createShoppingListItemDto.CustomName?.Trim();
+        var hasIngredient = createShoppingListItemDto.IngredientId.HasValue;
+        var hasCustomName = !string.IsNullOrWhiteSpace(customName);
+
+        if (hasIngredient == hasCustomName)
+        {
+            return BadRequest(new
+            {
+                Message = "Select an ingredient or enter a custom item name."
+            });
+        }
+
+        if (createShoppingListItemDto.Quantity.HasValue
+            && createShoppingListItemDto.Quantity.Value <= 0)
         {
             return BadRequest(new
             {
@@ -494,34 +513,71 @@ public class ShoppingListController : ApiControllerBase
             });
         }
 
-        var ingredientExists = await _context.Ingredients
-            .AnyAsync(ingredient => ingredient.Id == createShoppingListItemDto.IngredientId);
-
-        if (!ingredientExists)
+        if (hasIngredient && (!createShoppingListItemDto.Quantity.HasValue
+            || !createShoppingListItemDto.UnitId.HasValue))
         {
             return BadRequest(new
             {
-                Message = "Ingredient does not exist."
+                Message = "Quantity and unit are required for ingredient items."
             });
         }
 
-        var unitExists = await _context.Units
-            .AnyAsync(unit => unit.Id == createShoppingListItemDto.UnitId);
-
-        if (!unitExists)
+        if (hasIngredient)
         {
-            return BadRequest(new
+            var ingredientExists = await _context.Ingredients
+                .AnyAsync(ingredient => ingredient.Id == createShoppingListItemDto.IngredientId);
+
+            if (!ingredientExists)
             {
-                Message = "Unit does not exist."
-            });
+                return BadRequest(new
+                {
+                    Message = "Ingredient does not exist."
+                });
+            }
         }
 
-        var item = await _context.ShoppingListItems
-            .FirstOrDefaultAsync(item => item.ShoppingListId == id
-                && item.ShoppingList != null
-                && item.ShoppingList.UserId == userId
-                && item.IngredientId == createShoppingListItemDto.IngredientId
-                && item.UnitId == createShoppingListItemDto.UnitId);
+        if (createShoppingListItemDto.UnitId.HasValue)
+        {
+            var unitExists = await _context.Units
+                .AnyAsync(unit => unit.Id == createShoppingListItemDto.UnitId);
+
+            if (!unitExists)
+            {
+                return BadRequest(new
+                {
+                    Message = "Unit does not exist."
+                });
+            }
+        }
+
+        ShoppingListItem? item = null;
+
+        if (hasIngredient)
+        {
+            item = await _context.ShoppingListItems
+                .FirstOrDefaultAsync(item => item.ShoppingListId == id
+                    && item.ShoppingList != null
+                    && item.ShoppingList.UserId == userId
+                    && item.IngredientId == createShoppingListItemDto.IngredientId
+                    && item.UnitId == createShoppingListItemDto.UnitId
+                    && item.CustomName == null
+                    && item.IsGenerated == false);
+        }
+
+        if (!hasIngredient)
+        {
+            var normalizedCustomName = customName!.ToLower();
+
+            item = await _context.ShoppingListItems
+                .FirstOrDefaultAsync(item => item.ShoppingListId == id
+                    && item.ShoppingList != null
+                    && item.ShoppingList.UserId == userId
+                    && item.IngredientId == null
+                    && item.UnitId == createShoppingListItemDto.UnitId
+                    && item.CustomName != null
+                    && item.CustomName.ToLower() == normalizedCustomName
+                    && item.IsGenerated == false);
+        }
 
         if (item is null)
         {
@@ -529,16 +585,21 @@ public class ShoppingListController : ApiControllerBase
             {
                 ShoppingListId = id,
                 IngredientId = createShoppingListItemDto.IngredientId,
+                CustomName = hasCustomName ? customName : null,
                 Quantity = createShoppingListItemDto.Quantity,
                 UnitId = createShoppingListItemDto.UnitId,
-                IsChecked = false
+                IsChecked = false,
+                IsGenerated = false
             };
 
             _context.ShoppingListItems.Add(item);
         }
         else
         {
-            item.Quantity += createShoppingListItemDto.Quantity;
+            if (createShoppingListItemDto.Quantity.HasValue)
+            {
+                item.Quantity = (item.Quantity ?? 0) + createShoppingListItemDto.Quantity.Value;
+            }
         }
 
         await _context.SaveChangesAsync();
@@ -582,7 +643,8 @@ public class ShoppingListController : ApiControllerBase
             return Unauthorized();
         }
 
-        if (updateShoppingListItemDto.Quantity <= 0)
+        if (updateShoppingListItemDto.Quantity.HasValue
+            && updateShoppingListItemDto.Quantity.Value <= 0)
         {
             return BadRequest(new
             {
@@ -590,14 +652,17 @@ public class ShoppingListController : ApiControllerBase
             });
         }
 
-        var unitExists = await _context.Units.AnyAsync(unit => unit.Id == updateShoppingListItemDto.UnitId);
-
-        if (!unitExists)
+        if (updateShoppingListItemDto.UnitId.HasValue)
         {
-            return BadRequest(new
+            var unitExists = await _context.Units.AnyAsync(unit => unit.Id == updateShoppingListItemDto.UnitId);
+
+            if (!unitExists)
             {
-                Message = "Unit does not exist."
-            });
+                return BadRequest(new
+                {
+                    Message = "Unit does not exist."
+                });
+            }
         }
 
         var item = await GetOwnedShoppingListItem(itemId, userId);
@@ -610,17 +675,34 @@ public class ShoppingListController : ApiControllerBase
             });
         }
 
+        if (item.IngredientId.HasValue
+            && (!updateShoppingListItemDto.Quantity.HasValue
+                || !updateShoppingListItemDto.UnitId.HasValue))
+        {
+            return BadRequest(new
+            {
+                Message = "Quantity and unit are required for ingredient items."
+            });
+        }
+
         var duplicateItem = await _context.ShoppingListItems
             .FirstOrDefaultAsync(existingItem => existingItem.Id != item.Id
                 && existingItem.ShoppingListId == item.ShoppingListId
                 && existingItem.ShoppingList != null
                 && existingItem.ShoppingList.UserId == userId
                 && existingItem.IngredientId == item.IngredientId
-                && existingItem.UnitId == updateShoppingListItemDto.UnitId);
+                && existingItem.UnitId == updateShoppingListItemDto.UnitId
+                && existingItem.CustomName == item.CustomName
+                && existingItem.IsGenerated == item.IsGenerated);
 
         if (duplicateItem is not null)
         {
-            duplicateItem.Quantity += updateShoppingListItemDto.Quantity;
+            if (updateShoppingListItemDto.Quantity.HasValue)
+            {
+                duplicateItem.Quantity = (duplicateItem.Quantity ?? 0)
+                    + updateShoppingListItemDto.Quantity.Value;
+            }
+
             _context.ShoppingListItems.Remove(item);
 
             await _context.SaveChangesAsync();
@@ -681,12 +763,14 @@ public class ShoppingListController : ApiControllerBase
                             : null)
                     .ThenBy(item => item.Ingredient != null
                         ? item.Ingredient.Name
-                        : null)
+                        : item.CustomName)
                     .Select(item => new ShoppingListItemResponseDto
                     {
                         Id = item.Id,
                         IngredientId = item.IngredientId,
                         IngredientName = item.Ingredient != null ? item.Ingredient.Name : null,
+                        CustomName = item.CustomName,
+                        ItemName = item.Ingredient != null ? item.Ingredient.Name : item.CustomName,
                         IngredientCategoryId = item.Ingredient != null
                             && item.Ingredient.IngredientCategory != null
                                 ? item.Ingredient.IngredientCategory.Id
@@ -699,7 +783,8 @@ public class ShoppingListController : ApiControllerBase
                         UnitId = item.UnitId,
                         UnitName = item.Unit != null ? item.Unit.Name : null,
                         UnitShortName = item.Unit != null ? item.Unit.ShortName : null,
-                        IsChecked = item.IsChecked
+                        IsChecked = item.IsChecked,
+                        IsGenerated = item.IsGenerated == true
                     })
                     .ToList()
             })
@@ -750,7 +835,7 @@ public class ShoppingListController : ApiControllerBase
             .FirstOrDefaultAsync();
     }
 
-    private async Task AddOrMergeShoppingListItems(
+    private async Task SyncGeneratedShoppingListItems(
         int shoppingListId,
         string userId,
         List<ShoppingListItem> items)
@@ -758,7 +843,15 @@ public class ShoppingListController : ApiControllerBase
         var existingItems = await _context.ShoppingListItems
             .Where(item => item.ShoppingListId == shoppingListId
                 && item.ShoppingList != null
-                && item.ShoppingList.UserId == userId)
+                && item.ShoppingList.UserId == userId
+                && item.IsGenerated == true)
+            .ToListAsync();
+
+        var legacyItems = await _context.ShoppingListItems
+            .Where(item => item.ShoppingListId == shoppingListId
+                && item.ShoppingList != null
+                && item.ShoppingList.UserId == userId
+                && item.IsGenerated == null)
             .ToListAsync();
 
         foreach (var item in items)
@@ -769,14 +862,44 @@ public class ShoppingListController : ApiControllerBase
 
             if (existingItem is not null)
             {
-                existingItem.Quantity += item.Quantity;
+                existingItem.Quantity = item.Quantity;
+                continue;
+            }
+
+            var legacyItem = legacyItems.FirstOrDefault(legacyItem =>
+                legacyItem.IngredientId == item.IngredientId
+                && legacyItem.UnitId == item.UnitId);
+
+            if (legacyItem is not null)
+            {
+                legacyItem.Quantity = item.Quantity;
+                legacyItem.IsGenerated = true;
+                existingItems.Add(legacyItem);
+                legacyItems.Remove(legacyItem);
                 continue;
             }
 
             item.ShoppingListId = shoppingListId;
+            item.IsGenerated = true;
             _context.ShoppingListItems.Add(item);
             existingItems.Add(item);
         }
+
+        var currentGeneratedKeys = items
+            .Select(item => new
+            {
+                item.IngredientId,
+                item.UnitId
+            })
+            .ToList();
+
+        var generatedItemsToRemove = existingItems
+            .Where(existingItem => !currentGeneratedKeys.Any(currentItem =>
+                currentItem.IngredientId == existingItem.IngredientId
+                && currentItem.UnitId == existingItem.UnitId))
+            .ToList();
+
+        _context.ShoppingListItems.RemoveRange(generatedItemsToRemove);
     }
 
     private static List<ShoppingListItem> BuildMergedShoppingListItems(List<MealPlan> mealPlans)
@@ -797,7 +920,8 @@ public class ShoppingListController : ApiControllerBase
                 IngredientId = group.Key.IngredientId,
                 UnitId = group.Key.UnitId,
                 Quantity = group.Sum(item => item.Quantity),
-                IsChecked = false
+                IsChecked = false,
+                IsGenerated = true
             })
             .ToList();
     }
@@ -822,6 +946,8 @@ public class ShoppingListController : ApiControllerBase
                 Id = item.Id,
                 IngredientId = item.IngredientId,
                 IngredientName = item.Ingredient != null ? item.Ingredient.Name : null,
+                CustomName = item.CustomName,
+                ItemName = item.Ingredient != null ? item.Ingredient.Name : item.CustomName,
                 IngredientCategoryId = item.Ingredient != null
                     && item.Ingredient.IngredientCategory != null
                         ? item.Ingredient.IngredientCategory.Id
@@ -834,7 +960,8 @@ public class ShoppingListController : ApiControllerBase
                 UnitId = item.UnitId,
                 UnitName = item.Unit != null ? item.Unit.Name : null,
                 UnitShortName = item.Unit != null ? item.Unit.ShortName : null,
-                IsChecked = item.IsChecked
+                IsChecked = item.IsChecked,
+                IsGenerated = item.IsGenerated == true
             })
             .FirstOrDefaultAsync();
     }

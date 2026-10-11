@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { getValidToken, setRedirectPath } from "@/lib/auth";
+import { loadFavoriteRecipeIds } from "@/lib/favorites";
 
 type RecipeDetails = {
   id: number;
@@ -51,6 +52,15 @@ type ApiResponse<T> = {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
+function getTodayDateInputValue() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 export default function RecipeDetailsPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -65,8 +75,13 @@ export default function RecipeDetailsPage() {
   const [mealPlanMessage, setMealPlanMessage] = useState<string | null>(null);
   const [wasAddedToMealPlan, setWasAddedToMealPlan] = useState(false);
   const [isAddingToMealPlan, setIsAddingToMealPlan] = useState(false);
+  const [isMealPlanDialogOpen, setIsMealPlanDialogOpen] = useState(false);
+  const [plannedDate, setPlannedDate] = useState(getTodayDateInputValue);
+  const [mealPlanServings, setMealPlanServings] = useState(1);
+  const [mealPlanValidationErrors, setMealPlanValidationErrors] = useState<string[]>([]);
   const [favoriteMessage, setFavoriteMessage] = useState<string | null>(null);
-  const [isAddingFavorite, setIsAddingFavorite] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
 
   useEffect(() => {
     async function fetchRecipeDetails() {
@@ -85,6 +100,7 @@ export default function RecipeDetailsPage() {
         setRecipe(data.result);
         setIngredients(data.result.ingredients);
         setSelectedServings(Math.max(1, data.result.servings));
+        setMealPlanServings(Math.max(1, data.result.servings));
       } catch (error) {
         setErrorMessage(
           error instanceof Error
@@ -97,6 +113,28 @@ export default function RecipeDetailsPage() {
     }
 
     fetchRecipeDetails();
+  }, [id]);
+
+  useEffect(() => {
+    async function fetchFavoriteState() {
+      const token = getValidToken();
+
+      if (!token) {
+        setIsFavorite(false);
+        return;
+      }
+
+      try {
+        const favoriteRecipeIds = await loadFavoriteRecipeIds(token);
+        setIsFavorite(favoriteRecipeIds.has(Number(id)));
+      } catch (error) {
+        setFavoriteMessage(
+          error instanceof Error ? error.message : "Favorite status could not be loaded."
+        );
+      }
+    }
+
+    fetchFavoriteState();
   }, [id]);
 
   useEffect(() => {
@@ -152,6 +190,36 @@ export default function RecipeDetailsPage() {
     && recipe.imageUrl !== "string"
     && URL.canParse(recipe.imageUrl);
 
+  function openMealPlanDialog() {
+    if (!recipe) {
+      return;
+    }
+
+    const token = getValidToken();
+
+    if (!token) {
+      setRedirectPath(pathname);
+      router.push("/login");
+      return;
+    }
+
+    setMealPlanMessage(null);
+    setMealPlanValidationErrors([]);
+    setWasAddedToMealPlan(false);
+    setPlannedDate((currentDate) => currentDate || getTodayDateInputValue());
+    setMealPlanServings(Math.max(1, selectedServings || recipe.servings || 1));
+    setIsMealPlanDialogOpen(true);
+  }
+
+  function closeMealPlanDialog() {
+    if (isAddingToMealPlan) {
+      return;
+    }
+
+    setIsMealPlanDialogOpen(false);
+    setMealPlanValidationErrors([]);
+  }
+
   async function handleAddToMealPlan() {
     if (!recipe) {
       return;
@@ -159,7 +227,22 @@ export default function RecipeDetailsPage() {
 
     setMealPlanMessage(null);
     setWasAddedToMealPlan(false);
-    setIsAddingToMealPlan(true);
+    setMealPlanValidationErrors([]);
+
+    const validationErrors: string[] = [];
+
+    if (!plannedDate) {
+      validationErrors.push("Date is required.");
+    }
+
+    if (!Number.isInteger(mealPlanServings) || mealPlanServings < 1) {
+      validationErrors.push("Servings must be at least 1.");
+    }
+
+    if (validationErrors.length > 0) {
+      setMealPlanValidationErrors(validationErrors);
+      return;
+    }
 
     try {
       const token = getValidToken();
@@ -170,7 +253,8 @@ export default function RecipeDetailsPage() {
         return;
       }
 
-      const today = new Date().toISOString().split("T")[0];
+      setIsAddingToMealPlan(true);
+
       const response = await fetch(`${API_URL}/api/mealplan`, {
         method: "POST",
         headers: {
@@ -179,8 +263,8 @@ export default function RecipeDetailsPage() {
         },
         body: JSON.stringify({
           recipeId: recipe.id,
-          servings: selectedServings,
-          plannedDate: today
+          servings: mealPlanServings,
+          plannedDate
         })
       });
 
@@ -194,6 +278,7 @@ export default function RecipeDetailsPage() {
 
       setMealPlanMessage("Recipe added to meal plan.");
       setWasAddedToMealPlan(true);
+      setIsMealPlanDialogOpen(false);
     } catch (error) {
       setMealPlanMessage(
         error instanceof Error
@@ -205,13 +290,13 @@ export default function RecipeDetailsPage() {
     }
   }
 
-  async function handleAddFavorite() {
+  async function handleToggleFavorite() {
     if (!recipe) {
       return;
     }
 
     setFavoriteMessage(null);
-    setIsAddingFavorite(true);
+    setIsTogglingFavorite(true);
 
     try {
       const token = getValidToken();
@@ -225,7 +310,7 @@ export default function RecipeDetailsPage() {
       const response = await fetch(
         `${API_URL}/api/favoriterecipe/${recipe.id}`,
         {
-          method: "POST",
+          method: isFavorite ? "DELETE" : "POST",
           headers: {
             Authorization: "Bearer " + token
           }
@@ -236,19 +321,23 @@ export default function RecipeDetailsPage() {
 
       if (!data.isSuccess || !response.ok) {
         throw new Error(
-          data.errorMessages?.[0] ?? "Recipe could not be added to favorites."
+          data.errorMessages?.[0]
+          ?? (isFavorite
+            ? "Recipe could not be removed from favorites."
+            : "Recipe could not be added to favorites.")
         );
       }
 
-      setFavoriteMessage("Recipe added to favorites.");
+      setIsFavorite((currentIsFavorite) => !currentIsFavorite);
+      setFavoriteMessage(isFavorite ? "Recipe removed from favorites." : "Recipe saved.");
     } catch (error) {
       setFavoriteMessage(
         error instanceof Error
           ? error.message
-          : "Recipe could not be added to favorites."
+          : "Favorite status could not be updated."
       );
     } finally {
-      setIsAddingFavorite(false);
+      setIsTogglingFavorite(false);
     }
   }
 
@@ -322,11 +411,11 @@ export default function RecipeDetailsPage() {
             <div className="flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={handleAddToMealPlan}
+                onClick={openMealPlanDialog}
                 disabled={isAddingToMealPlan}
                 className="primary-button"
               >
-                {isAddingToMealPlan ? "Adding..." : "Add to Meal Plan"}
+                Add to Meal Plan
               </button>
               {wasAddedToMealPlan && (
                 <Link href="/meal-plan" className="secondary-button">
@@ -335,11 +424,11 @@ export default function RecipeDetailsPage() {
               )}
               <button
                 type="button"
-                onClick={handleAddFavorite}
-                disabled={isAddingFavorite}
-                className="secondary-button"
+                onClick={handleToggleFavorite}
+                disabled={isTogglingFavorite}
+                className={isFavorite ? "primary-button" : "secondary-button"}
               >
-                {isAddingFavorite ? "Saving..." : "Favorite"}
+                {isTogglingFavorite ? "Saving..." : isFavorite ? "♥ Saved" : "♡ Save"}
               </button>
             </div>
 
@@ -352,6 +441,80 @@ export default function RecipeDetailsPage() {
           </div>
         </div>
       </div>
+
+      {isMealPlanDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6">
+          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-lg">
+            <div>
+              <p className="eyebrow">Meal Plan</p>
+              <h2 className="mt-2 text-xl font-semibold tracking-normal text-slate-950">
+                Add {recipe.title}
+              </h2>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <div>
+                <label className="form-label" htmlFor="planned-date">
+                  Date
+                </label>
+                <input
+                  id="planned-date"
+                  type="date"
+                  value={plannedDate}
+                  onChange={(event) => setPlannedDate(event.target.value)}
+                  className="form-input"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="form-label" htmlFor="meal-plan-servings">
+                  Servings
+                </label>
+                <input
+                  id="meal-plan-servings"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={mealPlanServings}
+                  onChange={(event) =>
+                    setMealPlanServings(Number(event.target.value))
+                  }
+                  className="form-input"
+                  required
+                />
+              </div>
+
+              {mealPlanValidationErrors.length > 0 && (
+                <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  {mealPlanValidationErrors.map((validationError) => (
+                    <p key={validationError}>{validationError}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeMealPlanDialog}
+                disabled={isAddingToMealPlan}
+                className="secondary-button"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAddToMealPlan}
+                disabled={isAddingToMealPlan}
+                className="primary-button"
+              >
+                {isAddingToMealPlan ? "Adding..." : "Add to Meal Plan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <section className="app-card p-5 lg:col-span-1">

@@ -2,6 +2,10 @@ using MealApp.Data;
 using MealApp.Middleware;
 using MealApp.Models;
 using MealApp.Services;
+using MealApp.Services.Import;
+using MealApp.Services.AgentTools;
+using MealApp.Services.Agent;
+using MealApp.Services.AgentActions;
 using MealApp.Services.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -41,9 +45,21 @@ builder.Services.AddControllers()
             return new BadRequestObjectResult(response);
         };
     });
-builder.Services.Configure<SupportEmailOptions>(
-    builder.Configuration.GetSection("SupportEmail"));
-builder.Services.AddScoped<ISupportRequestService, SupportRequestService>();
+builder.Services.Configure<BrevoEmailOptions>(
+    builder.Configuration.GetSection("BrevoEmail"));
+builder.Services.AddHttpClient<ISupportRequestService, SupportRequestService>();
+builder.Services.AddScoped<DataImportService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<RecipeReadService>();
+builder.Services.AddSingleton<ToolRegistry>();
+builder.Services.AddScoped<AgentToolExecutor>();
+builder.Services.AddSingleton<AgentToolPolicy>();
+builder.Services.AddSingleton<IPendingActionStore, InMemoryPendingActionStore>();
+builder.Services.AddScoped<AgentActionService>();
+builder.Services.Configure<AgentOptions>(builder.Configuration.GetSection("Agent"));
+builder.Services.AddHttpClient<IAgentModelClient, OllamaModelClient>(client => client.Timeout = Timeout.InfiniteTimeSpan)
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddScoped<AgentChatService>();
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection"),
@@ -207,7 +223,11 @@ static void ValidateProductionConfiguration(IConfiguration configuration, IWebHo
         "AdminUser__Email",
         "AdminUser__Password",
         "Cors__AllowedOrigins__0",
-        "SeedSampleData"
+        "SeedSampleData",
+        "BrevoEmail__ApiKey",
+        "BrevoEmail__SenderEmail",
+        "BrevoEmail__SenderName",
+        "BrevoEmail__ToEmail"
     ];
 
     foreach (var variableName in requiredEnvironmentVariables)
@@ -226,7 +246,11 @@ static void ValidateProductionConfiguration(IConfiguration configuration, IWebHo
         ["Jwt:Issuer"] = configuration["Jwt:Issuer"],
         ["Jwt:Audience"] = configuration["Jwt:Audience"],
         ["AdminUser:Email"] = configuration["AdminUser:Email"],
-        ["AdminUser:Password"] = configuration["AdminUser:Password"]
+        ["AdminUser:Password"] = configuration["AdminUser:Password"],
+        ["BrevoEmail:ApiKey"] = configuration["BrevoEmail:ApiKey"],
+        ["BrevoEmail:SenderEmail"] = configuration["BrevoEmail:SenderEmail"],
+        ["BrevoEmail:SenderName"] = configuration["BrevoEmail:SenderName"],
+        ["BrevoEmail:ToEmail"] = configuration["BrevoEmail:ToEmail"]
     };
 
     foreach (var requiredValue in requiredValues)

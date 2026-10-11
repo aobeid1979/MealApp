@@ -18,11 +18,12 @@ const publicLinks = [
 ];
 
 const protectedLinks = [
+  { href: "/assistant", label: "Assistant" },
   { href: "/meal-plan", label: "Meal Plan" },
   { href: "/shopping-list", label: "Shopping List" }
 ];
 
-const protectedPaths = ["/admin", "/meal-plan", "/shopping-list", "/profile"];
+const protectedPaths = ["/admin", "/assistant", "/meal-plan", "/shopping-list", "/profile"];
 
 export default function Header() {
   const pathname = usePathname();
@@ -98,6 +99,9 @@ export default function Header() {
                        isActive={pathname === link.href}
                      />
                    ))}
+                   {userRole === "Admin" && (
+                     <NavigationLink href="/admin/agent-actions" label="Agent proposals" isActive={pathname === "/admin/agent-actions"} />
+                   )}
                    {userRole === "Admin" && (
                      <NavigationLink
                        href="/admin"

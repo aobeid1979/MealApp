@@ -14,15 +14,18 @@ type ShoppingList = {
 
 type ShoppingListItem = {
   id: number;
-  ingredientId: number;
+  ingredientId: number | null;
   ingredientName: string | null;
+  customName: string | null;
+  itemName: string | null;
   ingredientCategoryId: number | null;
   ingredientCategoryName: string | null;
-  quantity: number;
-  unitId: number;
+  quantity: number | null;
+  unitId: number | null;
   unitName: string | null;
   unitShortName: string | null;
   isChecked: boolean;
+  isGenerated: boolean;
 };
 
 type ShoppingListGroup = {
@@ -69,7 +72,7 @@ export default function ShoppingListPage() {
   const [groupedShoppingListId, setGroupedShoppingListId] = useState<number | null>(null);
   const [groupedItems, setGroupedItems] = useState<ShoppingListGroup[]>([]);
   const [isLoadingGroupedItems, setIsLoadingGroupedItems] = useState(false);
-  const [addIngredientId, setAddIngredientId] = useState("");
+  const [addItemName, setAddItemName] = useState("");
   const [addQuantity, setAddQuantity] = useState("");
   const [addUnitId, setAddUnitId] = useState("");
   const [isAddingItemToListId, setIsAddingItemToListId] = useState<number | null>(null);
@@ -163,8 +166,8 @@ export default function ShoppingListPage() {
   function startEditingItem(item: ShoppingListItem) {
     setMessage(null);
     setEditingItemId(item.id);
-    setEditQuantity(item.quantity.toString());
-    setEditUnitId(item.unitId.toString());
+    setEditQuantity(item.quantity?.toString() ?? "");
+    setEditUnitId(item.unitId?.toString() ?? "");
   }
 
   async function refreshShoppingLists() {
@@ -190,8 +193,8 @@ export default function ShoppingListPage() {
             Authorization: "Bearer " + token
           },
           body: JSON.stringify({
-            quantity: Number(editQuantity),
-            unitId: Number(editUnitId)
+            quantity: editQuantity ? Number(editQuantity) : null,
+            unitId: editUnitId ? Number(editUnitId) : null
           })
         }
       );
@@ -476,17 +479,28 @@ export default function ShoppingListPage() {
         throw new Error("Login token was not found.");
       }
 
+      const itemName = addItemName.trim();
+
+      if (!itemName) {
+        throw new Error("Item name is required.");
+      }
+
+      const matchingIngredient = findMatchingIngredient(ingredients, itemName);
+      const requestBody = {
+        ...(matchingIngredient
+          ? { ingredientId: matchingIngredient.id }
+          : { customName: itemName }),
+        ...(addQuantity ? { quantity: Number(addQuantity) } : {}),
+        ...(addUnitId ? { unitId: Number(addUnitId) } : {})
+      };
+
       const response = await fetch(`${API_URL}/api/shoppinglist/${shoppingListId}/items`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: "Bearer " + token
         },
-        body: JSON.stringify({
-          ingredientId: Number(addIngredientId),
-          quantity: Number(addQuantity),
-          unitId: Number(addUnitId)
-        })
+        body: JSON.stringify(requestBody)
       });
 
       const data = (await response.json()) as ApiResponse<ShoppingListItem>;
@@ -495,7 +509,7 @@ export default function ShoppingListPage() {
         throw new Error(data.errorMessages?.[0] ?? "Shopping list item could not be added.");
       }
 
-      setAddIngredientId("");
+      setAddItemName("");
       setAddQuantity("");
       setAddUnitId("");
       await refreshShoppingLists();
@@ -686,22 +700,20 @@ export default function ShoppingListPage() {
                 </h3>
                 <div className="mt-3 grid gap-3 md:grid-cols-[1.5fr_1fr_1fr_auto] md:items-end">
                   <label className="form-label">
-                    Ingredient
-                    <select
-                      value={addIngredientId}
-                      onChange={(event) => setAddIngredientId(event.target.value)}
+                    Item
+                    <input
+                      type="text"
+                      list={`shopping-list-ingredients-${shoppingList.id}`}
+                      value={addItemName}
+                      onChange={(event) => setAddItemName(event.target.value)}
                       className="form-input"
-                    >
-                      <option value="">Select ingredient</option>
+                      placeholder="Search ingredient or type custom item"
+                    />
+                    <datalist id={`shopping-list-ingredients-${shoppingList.id}`}>
                       {ingredients.map((ingredient) => (
-                        <option key={ingredient.id} value={ingredient.id}>
-                          {ingredient.name}
-                          {ingredient.ingredientCategoryName
-                            ? ` (${ingredient.ingredientCategoryName})`
-                            : ""}
-                        </option>
+                        <option key={ingredient.id} value={ingredient.name} />
                       ))}
-                    </select>
+                    </datalist>
                   </label>
                   <label className="form-label">
                     Quantity
@@ -734,9 +746,7 @@ export default function ShoppingListPage() {
                     onClick={() => handleAddItem(shoppingList.id)}
                     disabled={
                       isAddingItemToListId === shoppingList.id
-                      || !addIngredientId
-                      || !addQuantity
-                      || !addUnitId
+                      || !addItemName.trim()
                     }
                     className="primary-button"
                   >
@@ -770,7 +780,7 @@ export default function ShoppingListPage() {
                           key={`${group.categoryId ?? "none"}-${group.categoryName ?? "none"}`}
                         >
                           <h4 className="text-sm font-semibold text-emerald-950">
-                            {group.categoryName ?? "Uncategorized"}
+                            {group.categoryName ?? "Custom items"}
                           </h4>
                           <ul className="mt-2 space-y-2">
                             {group.items.map((item) => (
@@ -778,9 +788,9 @@ export default function ShoppingListPage() {
                                 key={item.id}
                                 className="flex justify-between gap-4 text-sm text-emerald-900"
                               >
-                                <span>{item.ingredientName ?? "Ingredient"}</span>
+                                <span>{getShoppingListItemName(item)}</span>
                                 <span>
-                                  {item.quantity}{" "}
+                                  {formatShoppingListQuantity(item)}
                                   {item.unitShortName ?? item.unitName ?? ""}
                                 </span>
                               </li>
@@ -817,13 +827,13 @@ export default function ShoppingListPage() {
                                 : "font-medium text-slate-800"
                             }
                           >
-                            {item.ingredientName ?? "Ingredient"}
+                            {getShoppingListItemName(item)}
                           </span>
                         </label>
 
                         <div className="flex flex-wrap items-center gap-3">
                           <span className="text-slate-600">
-                            {item.quantity}{" "}
+                            {formatShoppingListQuantity(item)}
                             {item.unitShortName ?? item.unitName ?? ""}
                           </span>
                           <button
@@ -935,7 +945,7 @@ function ShoppingListItemsEmptyState() {
         This shopping list has no items.
       </h3>
       <p className="mt-2 text-sm leading-6 text-slate-600">
-        Items appear after adding meals to your meal plan and generating a list with recipe ingredients.
+        Items appear after adding meals to your meal plan, generating a list, or adding a custom item above.
       </p>
       <Link href="/meal-plan" className="secondary-button mt-5 inline-flex">
         View Meal Plan
@@ -988,6 +998,22 @@ async function loadUnits() {
   }
 
   return data.result;
+}
+
+function findMatchingIngredient(ingredients: Ingredient[], itemName: string) {
+  return ingredients.find(
+    (ingredient) => ingredient.name.toLowerCase() === itemName.trim().toLowerCase()
+  );
+}
+
+function getShoppingListItemName(item: ShoppingListItem) {
+  return item.itemName ?? item.ingredientName ?? item.customName ?? "Item";
+}
+
+function formatShoppingListQuantity(item: ShoppingListItem) {
+  return item.quantity === null || item.quantity === undefined
+    ? ""
+    : `${item.quantity} `;
 }
 
 function formatDate(value: string) {
