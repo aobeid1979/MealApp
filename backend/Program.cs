@@ -45,8 +45,10 @@ builder.Services.AddControllers()
             return new BadRequestObjectResult(response);
         };
     });
-builder.Services.Configure<BrevoEmailOptions>(
-    builder.Configuration.GetSection("BrevoEmail"));
+builder.Services.AddSingleton<Microsoft.Extensions.Options.IValidateOptions<BrevoEmailOptions>, BrevoEmailOptionsValidator>();
+builder.Services.AddOptions<BrevoEmailOptions>()
+    .Bind(builder.Configuration.GetSection("BrevoEmail"))
+    .ValidateOnStart();
 builder.Services.AddHttpClient<ISupportRequestService, SupportRequestService>();
 builder.Services.AddScoped<DataImportService>();
 builder.Services.AddHttpContextAccessor();
@@ -223,11 +225,7 @@ static void ValidateProductionConfiguration(IConfiguration configuration, IWebHo
         "AdminUser__Email",
         "AdminUser__Password",
         "Cors__AllowedOrigins__0",
-        "SeedSampleData",
-        "BrevoEmail__ApiKey",
-        "BrevoEmail__SenderEmail",
-        "BrevoEmail__SenderName",
-        "BrevoEmail__ToEmail"
+        "SeedSampleData"
     ];
 
     foreach (var variableName in requiredEnvironmentVariables)
@@ -246,11 +244,7 @@ static void ValidateProductionConfiguration(IConfiguration configuration, IWebHo
         ["Jwt:Issuer"] = configuration["Jwt:Issuer"],
         ["Jwt:Audience"] = configuration["Jwt:Audience"],
         ["AdminUser:Email"] = configuration["AdminUser:Email"],
-        ["AdminUser:Password"] = configuration["AdminUser:Password"],
-        ["BrevoEmail:ApiKey"] = configuration["BrevoEmail:ApiKey"],
-        ["BrevoEmail:SenderEmail"] = configuration["BrevoEmail:SenderEmail"],
-        ["BrevoEmail:SenderName"] = configuration["BrevoEmail:SenderName"],
-        ["BrevoEmail:ToEmail"] = configuration["BrevoEmail:ToEmail"]
+        ["AdminUser:Password"] = configuration["AdminUser:Password"]
     };
 
     foreach (var requiredValue in requiredValues)

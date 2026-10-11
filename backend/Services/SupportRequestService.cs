@@ -28,6 +28,11 @@ public class SupportRequestService : ISupportRequestService
 
     public async Task ReceiveAsync(SupportRequest supportRequest)
     {
+        if (!_options.Enabled)
+        {
+            throw new SupportEmailUnavailableException();
+        }
+
         ValidateOptions();
 
         var payload = CreatePayload(supportRequest);

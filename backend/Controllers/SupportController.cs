@@ -83,6 +83,16 @@ public class SupportController : ApiControllerBase
                 Attachment = await CreateAttachmentAsync(requestDto.Image)
             });
         }
+        catch (SupportEmailUnavailableException exception)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ApiResponse
+            {
+                IsSuccess = false,
+                Result = null,
+                ErrorMessages = [exception.Message],
+                StatusCode = StatusCodes.Status503ServiceUnavailable
+            });
+        }
         catch (SupportRequestEmailException)
         {
             return StatusCode(
