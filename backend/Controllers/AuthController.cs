@@ -1,7 +1,9 @@
 using MealApp.DTOs;
+using MealApp.Middleware;
 using MealApp.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -12,23 +14,30 @@ namespace MealApp.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[EnableRateLimiting(AuthRateLimiting.PolicyName)]
 public class AuthController : ApiControllerBase
 {
     // Email verification is disabled temporarily until SMTP/email provider is configured.
     private static readonly bool EmailVerificationEnabled = false;
 
+    public const string LockedOutMessage =
+        "Too many failed login attempts. Please try again later.";
+
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly IConfiguration _configuration;
     private readonly IWebHostEnvironment _environment;
     private readonly ILogger<AuthController> _logger;
 
     public AuthController(
         UserManager<ApplicationUser> userManager,
+        SignInManager<ApplicationUser> signInManager,
         IConfiguration configuration,
         IWebHostEnvironment environment,
         ILogger<AuthController> logger)
     {
         _userManager = userManager;
+        _signInManager = signInManager;
         _configuration = configuration;
         _environment = environment;
         _logger = logger;
@@ -173,9 +182,26 @@ public class AuthController : ApiControllerBase
             });
         }
 
-        var passwordIsValid = await _userManager.CheckPasswordAsync(user, loginDto.Password);
+        // CheckPasswordSignInAsync counts failed attempts and enforces Identity lockout,
+        // which UserManager.CheckPasswordAsync does not.
+        var signInResult = await _signInManager.CheckPasswordSignInAsync(
+            user,
+            loginDto.Password,
+            lockoutOnFailure: true);
 
-        if (!passwordIsValid)
+        if (signInResult.IsLockedOut)
+        {
+            _logger.LogWarning("Login rejected for locked-out user {UserId}.", user.Id);
+
+            return StatusCode(StatusCodes.Status429TooManyRequests, new ApiResponse
+            {
+                IsSuccess = false,
+                StatusCode = StatusCodes.Status429TooManyRequests,
+                ErrorMessages = [LockedOutMessage]
+            });
+        }
+
+        if (!signInResult.Succeeded)
         {
             return Unauthorized(new
             {

@@ -83,9 +83,15 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     {
         // Email verification is disabled temporarily until SMTP/email provider is configured.
         options.SignIn.RequireConfirmedEmail = false;
+
+        options.Lockout.AllowedForNewUsers = true;
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
     })
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
+
+builder.Services.AddAuthRateLimiting();
 
 var jwtSecret = builder.Configuration["Jwt:Secret"];
 
@@ -198,6 +204,8 @@ app.UseCors(FrontendCorsPolicy);
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseRateLimiter();
 
 app.MapControllers();
 

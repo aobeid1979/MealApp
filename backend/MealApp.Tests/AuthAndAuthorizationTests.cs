@@ -1614,8 +1614,13 @@ public record CategoryDeleteSetup(int CategoryId);
 public class MealAppApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _databaseName = $"MealAppTests-{Guid.NewGuid():N}";
-    public MealAppApiFactory()
+    private readonly int _authRateLimit;
+
+    // Most tests make many auth calls from one client, so the default limit is set high;
+    // rate-limit tests pass a small value.
+    public MealAppApiFactory(int authRateLimit = 1000)
     {
+        _authRateLimit = authRateLimit;
         Environment.SetEnvironmentVariable("Jwt__Secret", "MealAppIntegrationTestSecretKey-ChangeThis");
         Environment.SetEnvironmentVariable("Jwt__Issuer", "MealApp");
         Environment.SetEnvironmentVariable("Jwt__Audience", "MealAppUsers");
@@ -1640,7 +1645,9 @@ public class MealAppApiFactory : WebApplicationFactory<Program>
                 ["Jwt:Issuer"] = "MealApp",
                 ["Jwt:Audience"] = "MealAppUsers",
                 ["AdminUser:Email"] = "",
-                ["AdminUser:Password"] = ""
+                ["AdminUser:Password"] = "",
+                ["RateLimiting:Auth:PermitLimit"] = _authRateLimit.ToString(),
+                ["RateLimiting:Auth:WindowSeconds"] = "60"
             });
         });
 
