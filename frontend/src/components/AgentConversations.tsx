@@ -173,7 +173,14 @@ export default function AgentConversations() {
           <form onSubmit={send} className="space-y-3">
             <label className="form-label" htmlFor="agent-message">Message</label>
             <textarea id="agent-message" className="form-input" rows={3} maxLength={2000} required value={input}
-              onChange={e => setInput(e.target.value)} disabled={working || (retryPending && !failedTurn)} />
+              onChange={e => setInput(e.target.value)} disabled={working || (retryPending && !failedTurn)}
+              onKeyDown={e => {
+                // Enter sends the message; Shift+Enter adds a new line. Skip while an IME is composing text.
+                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
+                }
+              }} />
             <button className="primary-button" disabled={working || failedTurn || !input.trim()}>{sending ? "Thinking..." : retryPending ? "Retry same message" : "Send"}</button>
           </form>
         </>}
