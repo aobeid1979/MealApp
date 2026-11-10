@@ -62,6 +62,7 @@ builder.Services.Configure<AgentOptions>(builder.Configuration.GetSection("Agent
 builder.Services.AddHttpClient<IAgentModelClient, OllamaModelClient>(client => client.Timeout = Timeout.InfiniteTimeSpan)
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddScoped<AgentChatService>();
+builder.Services.AddScoped<AgentConversationService>();
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection"),
@@ -156,6 +157,18 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
+    // In local development, create any missing tables (for example the Agent conversation
+    // tables) before the app uses them. Production databases are still migrated manually.
+    if (app.Environment.IsDevelopment())
+    {
+        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        if (dbContext.Database.IsRelational())
+        {
+            await dbContext.Database.MigrateAsync();
+        }
+    }
+
     await RoleSeeder.SeedRolesAsync(scope.ServiceProvider);
     await AdminSeeder.SeedDefaultAdminAsync(scope.ServiceProvider);
     await SampleDataSeeder.SeedAsync(scope.ServiceProvider);

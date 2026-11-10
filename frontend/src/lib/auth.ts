@@ -11,6 +11,7 @@ type JwtPayload = {
 
 const authKeys = ["token", "email", "name", "role"];
 const redirectPathKey = "redirectPath";
+export const AUTH_SESSION_CHANGED = "mealapp-auth-session-changed";
 
 function isBrowser() {
   return typeof window !== "undefined";
@@ -27,6 +28,7 @@ export function saveAuthSession(session: AuthSession) {
   sessionStorage.setItem("email", session.email);
   sessionStorage.setItem("name", session.name);
   sessionStorage.setItem("role", session.role);
+  window.dispatchEvent(new Event(AUTH_SESSION_CHANGED));
 }
 
 export function clearAuthSession() {
@@ -34,10 +36,12 @@ export function clearAuthSession() {
     return;
   }
 
+  const hadSession = authKeys.some(key => sessionStorage.getItem(key) !== null);
   authKeys.forEach((key) => {
     sessionStorage.removeItem(key);
     localStorage.removeItem(key);
   });
+  if (hadSession) window.dispatchEvent(new Event(AUTH_SESSION_CHANGED));
 }
 
 export function getValidToken() {

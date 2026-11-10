@@ -12,7 +12,7 @@ const loaded = new Module(filename, module);
 loaded._compile(ts.transpileModule(fs.readFileSync(filename, "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 }
 }).outputText, filename);
-const { readAgentResponse, isChatReply, isActionList, isAction } = loaded.exports;
+const { readAgentResponse, isChatReply, isActionList, isAction, isConversation, isConversationList, isConversationDetails, isConversationReply } = loaded.exports;
 const envelope = (result, status = 200, errors = []) => new Response(JSON.stringify({
   isSuccess: status === 200, result, errorMessages: errors, statusCode: status
 }), { status });
@@ -46,4 +46,24 @@ test("validates review payloads before rendering and decision results", async ()
   assert.equal(isActionList([{ ...action, payload: { ...action.payload, steps: [null] } }]), false);
   assert.equal(isActionList([{ ...action, payload: { ...action.payload, ingredients: null } }]), false);
   assert.equal(isActionList(null), false);
+});
+
+const conversation = { id: "conversation-id", title: "Chicken dinner", createdAtUtc: new Date().toISOString(), updatedAtUtc: new Date().toISOString() };
+test("validates private conversation lists and paginated chronological messages", async () => {
+  const list = { items: [conversation], page: 1, hasMore: false };
+  assert.deepEqual(await readAgentResponse(envelope(list), isConversationList), list);
+  assert.equal(isConversation(null), false);
+  assert.equal(isConversationList({ ...list, items: [null] }), false);
+  const details = { conversation, messages: [{ id: "message", role: "User", content: "Find chicken", sequence: 1, createdAtUtc: new Date().toISOString() }], hasMore: false, nextBeforeSequence: null };
+  assert.deepEqual(await readAgentResponse(envelope(details), isConversationDetails), details);
+  assert.equal(isConversationDetails({ ...details, messages: [{ ...details.messages[0], role: "system" }] }), false);
+  assert.equal(isConversationDetails({ ...details, messages: [null] }), false);
+});
+
+test("requires server conversation/turn IDs and recognizes explicit failed attempts", async () => {
+  assert.equal(isConversationReply(reply), false);
+  assert.equal(isConversationReply({ ...reply, conversationId: "conversation", requestId: "request" }), true);
+  await assert.rejects(readAgentResponse(envelope({ requestState: "Failed" }, 503, ["Model unavailable."]), isConversationReply), error => error.failedTurn === true);
+  await assert.rejects(readAgentResponse(envelope({ requestState: "Failed" }, 403, ["Write denied."]), isConversationReply), error => error.failedTurn === true && error.status === 403);
+  await assert.rejects(readAgentResponse(envelope(null, 503, ["Save unavailable."]), isConversationReply), error => error.failedTurn === false);
 });

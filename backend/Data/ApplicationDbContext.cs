@@ -35,9 +35,24 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
     public DbSet<FavoriteRecipe> FavoriteRecipes { get; set; }
 
+    public DbSet<AgentConversation> AgentConversations { get; set; }
+    public DbSet<AgentMessage> AgentMessages { get; set; }
+    public DbSet<AgentConversationTurn> AgentConversationTurns { get; set; }
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+
+        builder.Entity<AgentConversation>().HasOne(x => x.User).WithMany()
+            .HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<AgentConversation>().HasIndex(x => new { x.UserId, x.UpdatedAtUtc });
+        builder.Entity<AgentMessage>().HasOne(x => x.Conversation).WithMany(x => x.Messages)
+            .HasForeignKey(x => x.ConversationId).OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<AgentMessage>().HasIndex(x => new { x.ConversationId, x.Sequence }).IsUnique();
+        builder.Entity<AgentMessage>().HasIndex(x => x.TurnId);
+        builder.Entity<AgentConversationTurn>().HasOne(x => x.Conversation).WithMany(x => x.Turns)
+            .HasForeignKey(x => x.ConversationId).OnDelete(DeleteBehavior.Cascade);
+        builder.Entity<AgentConversationTurn>().HasIndex(x => new { x.ConversationId, x.RequestId }).IsUnique();
 
         builder.Entity<Ingredient>()
             .HasOne(ingredient => ingredient.IngredientCategory)

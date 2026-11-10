@@ -6,6 +6,8 @@ namespace MealApp.DTOs.Agent;
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public class AgentChatRequest
 {
+    public Guid? ConversationId { get; set; }
+    public Guid? RequestId { get; set; }
     [Required]
     [StringLength(2000)]
     public string Message { get; set; } = "";
@@ -14,6 +16,10 @@ public class AgentChatRequest
 public record AgentToolCallSummary(string Tool, bool IsSuccess, string Code);
 public record AgentChatResponse(string Answer, IReadOnlyList<AgentToolCallSummary> ToolCalls)
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Guid? ConversationId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Guid? RequestId { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public object? PendingAction { get; init; }
 }

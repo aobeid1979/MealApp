@@ -1,5 +1,7 @@
 # Mission 5: Assistant and human approval UI
 
+Mission 6 extends the assistant with persistent private conversations and bounded context. See [AGENT_CONVERSATIONS.md](AGENT_CONVERSATIONS.md) for the current chat contract, persistence, privacy and retry behavior. The stateless-chat descriptions below document the original Mission 5 checkpoint; the approval UI remains unchanged.
+
 ## Existing architecture
 
 Next.js App Router client pages use the existing sessionStorage authentication helpers, JWT expiration checks, role checks, `NEXT_PUBLIC_API_URL`, `ApiResponse` envelope, shared Header, and Tailwind component classes. Backend authorization and the tool policy remain the security boundary. No backend contracts, tools, model configuration, database schema, or auth architecture changed.

@@ -25,6 +25,20 @@ type ApiResponse<T> = {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
+// Only follow redirects to pages inside this app, and never back to login/register
+// (that would make a successful login look like "nothing happened").
+function getSafeRedirectPath(path: string | null) {
+  if (!path || !path.startsWith("/") || path.startsWith("//")) {
+    return null;
+  }
+
+  if (path.startsWith("/login") || path.startsWith("/register")) {
+    return null;
+  }
+
+  return path;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -35,6 +49,26 @@ export default function LoginPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage(null);
+
+    const trimmedEmail = email.trim();
+
+    // We validate here instead of relying on the browser's built-in popup,
+    // which is easy to miss and made the login look like it did nothing.
+    if (!trimmedEmail || !password) {
+      setMessage("Please enter both your email and your password.");
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setMessage("Please log in with your email address (for example name@example.com), not a username.");
+      return;
+    }
+
+    if (!API_URL) {
+      setMessage("The app is not configured: NEXT_PUBLIC_API_URL is missing in frontend/.env.local. Restart the frontend after setting it.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -44,7 +78,7 @@ export default function LoginPage() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          email,
+          email: trimmedEmail,
           password
         })
       });
@@ -57,8 +91,12 @@ export default function LoginPage() {
         throw new Error("Unable to connect to the server. Please try again.");
       }
 
-      if (!data.isSuccess || !response.ok) {
-        throw new Error(data.errorMessages?.[0] ?? "Login failed.");
+      if (!data || !data.isSuccess || !response.ok) {
+        throw new Error(data?.errorMessages?.[0] ?? `Login failed (HTTP ${response.status}).`);
+      }
+
+      if (!data.result?.token) {
+        throw new Error("Login failed: the server did not return a token.");
       }
 
       saveAuthSession({
@@ -68,7 +106,7 @@ export default function LoginPage() {
         role: data.result.role ?? ""
       });
 
-      const redirectPath = getRedirectPath();
+      const redirectPath = getSafeRedirectPath(getRedirectPath());
       clearRedirectPath();
 
       if (redirectPath) {
@@ -103,14 +141,16 @@ export default function LoginPage() {
         Sign in to save recipes to your meal plan.
       </p>
 
-      <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+      <form className="mt-6 space-y-4" method="post" noValidate onSubmit={handleSubmit}>
         <div>
           <label className="form-label" htmlFor="email">
             Email
           </label>
           <input
             id="email"
+            name="email"
             type="email"
+            autoComplete="username"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             required
@@ -127,7 +167,9 @@ export default function LoginPage() {
           </label>
           <input
             id="password"
+            name="password"
             type="password"
+            autoComplete="current-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             required
@@ -144,7 +186,11 @@ export default function LoginPage() {
         </button>
       </form>
 
-      {message && <div className="error-panel mt-4">{message}</div>}
+      {message && (
+        <div className="error-panel mt-4" role="alert">
+          {message}
+        </div>
+      )}
     </section>
   );
 }
