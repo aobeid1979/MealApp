@@ -1,7 +1,5 @@
 using MealApp.DTOs;
 using MealApp.Models;
-using MealApp.Services;
-using MealApp.Services.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -31,14 +29,10 @@ public class SupportController : ApiControllerBase
     };
 
     private readonly UserManager<ApplicationUser> _userManager;
-    private readonly ISupportRequestService _supportRequestService;
 
-    public SupportController(
-        UserManager<ApplicationUser> userManager,
-        ISupportRequestService supportRequestService)
+    public SupportController(UserManager<ApplicationUser> userManager)
     {
         _userManager = userManager;
-        _supportRequestService = supportRequestService;
     }
 
     [HttpPost]
@@ -66,49 +60,13 @@ public class SupportController : ApiControllerBase
             });
         }
 
-        try
+        // Delivery is unavailable. Do not acknowledge or store a request as sent.
+        return StatusCode(StatusCodes.Status503ServiceUnavailable, new ApiResponse
         {
-            await _supportRequestService.ReceiveAsync(new SupportRequest
-            {
-                Title = requestDto.Title.Trim(),
-                Description = requestDto.Description.Trim(),
-                Name = user?.Name ?? requestDto.Name?.Trim(),
-                Email = user?.Email ?? requestDto.Email?.Trim(),
-                Phone = user is null ? requestDto.Phone?.Trim() : null,
-                UserId = user?.Id,
-                IsAuthenticated = user is not null,
-                ImageFileName = requestDto.Image?.FileName,
-                ImageContentType = requestDto.Image?.ContentType,
-                ImageSizeBytes = requestDto.Image?.Length,
-                Attachment = await CreateAttachmentAsync(requestDto.Image)
-            });
-        }
-        catch (SupportEmailUnavailableException exception)
-        {
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ApiResponse
-            {
-                IsSuccess = false,
-                Result = null,
-                ErrorMessages = [exception.Message],
-                StatusCode = StatusCodes.Status503ServiceUnavailable
-            });
-        }
-        catch (SupportRequestEmailException)
-        {
-            return StatusCode(
-                StatusCodes.Status500InternalServerError,
-                new ApiResponse
-                {
-                    IsSuccess = false,
-                    Result = null,
-                    ErrorMessages = ["Support request could not be sent. Please try again later."],
-                    StatusCode = StatusCodes.Status500InternalServerError
-                });
-        }
-
-        return Ok(new
-        {
-            Message = "Support request received successfully."
+            IsSuccess = false,
+            Result = null,
+            ErrorMessages = ["Support email delivery is temporarily unavailable. Please try again later."],
+            StatusCode = StatusCodes.Status503ServiceUnavailable
         });
     }
 
@@ -189,23 +147,5 @@ public class SupportController : ApiControllerBase
         {
             return false;
         }
-    }
-
-    private static async Task<SupportRequestAttachment?> CreateAttachmentAsync(IFormFile? image)
-    {
-        if (image is null)
-        {
-            return null;
-        }
-
-        using var memoryStream = new MemoryStream();
-        await image.CopyToAsync(memoryStream);
-
-        return new SupportRequestAttachment
-        {
-            FileName = Path.GetFileName(image.FileName),
-            ContentType = image.ContentType,
-            Content = memoryStream.ToArray()
-        };
     }
 }

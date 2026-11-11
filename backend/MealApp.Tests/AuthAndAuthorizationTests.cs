@@ -4,8 +4,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using MealApp.Data;
 using MealApp.Models;
-using MealApp.Services;
-using MealApp.Services.Models;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -955,7 +953,7 @@ public class AuthAndAuthorizationTests
     }
 
     [Fact]
-    public async Task Guest_CanSubmitSupportRequestWithEmail()
+    public async Task GuestSupportRequest_WithEmail_ReturnsServiceUnavailable()
     {
         await using var factory = new MealAppApiFactory();
         var client = factory.CreateClient();
@@ -966,14 +964,7 @@ public class AuthAndAuthorizationTests
 
         var response = await client.PostAsync("/api/support", content);
 
-        await EnsureSuccessAsync(response);
-
-        using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
-
-        Assert.True(json.RootElement.GetProperty("isSuccess").GetBoolean());
-        Assert.Equal(
-            "Support request received successfully.",
-            json.RootElement.GetProperty("result").GetProperty("message").GetString());
+        await AssertSupportUnavailableAsync(response);
     }
 
     [Fact]
@@ -993,7 +984,7 @@ public class AuthAndAuthorizationTests
     }
 
     [Fact]
-    public async Task AuthenticatedUser_CanSubmitSupportRequestWithoutGuestContact()
+    public async Task AuthenticatedUserSupportRequest_WithoutGuestContact_ReturnsServiceUnavailable()
     {
         await using var factory = new MealAppApiFactory();
         var client = factory.CreateClient();
@@ -1005,11 +996,13 @@ public class AuthAndAuthorizationTests
 
         using var content = CreateSupportFormContent(
             title: "Account issue",
-            description: "I need help with my account.");
+            description: "I need help with my account.",
+            name: "Not the account owner",
+            email: "invalid-guest-email");
 
         var response = await client.PostAsync("/api/support", content);
 
-        await EnsureSuccessAsync(response);
+        await AssertSupportUnavailableAsync(response);
     }
 
     [Fact]
@@ -1031,26 +1024,96 @@ public class AuthAndAuthorizationTests
     }
 
     [Fact]
-    public async Task SupportRequest_WhenEmailServiceFails_ReturnsSafeServerError()
+    public async Task GuestSupportRequest_WithPhoneOnly_ReturnsServiceUnavailable()
     {
-        await using var factory = new MealAppApiFactory(supportRequestServiceShouldFail: true);
+        await using var factory = new MealAppApiFactory();
         var client = factory.CreateClient();
         using var content = CreateSupportFormContent(
             title: "Need help",
             description: "I need help with my shopping list.",
-            email: "guest@example.com");
+            phone: "+46700000000");
 
         var response = await client.PostAsync("/api/support", content);
 
+        await AssertSupportUnavailableAsync(response);
+    }
+
+    private static async Task AssertSupportUnavailableAsync(HttpResponseMessage response)
+    {
         using var json = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
         var root = json.RootElement;
 
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.False(root.GetProperty("isSuccess").GetBoolean());
-        Assert.Equal(500, root.GetProperty("statusCode").GetInt32());
+        Assert.Equal(503, root.GetProperty("statusCode").GetInt32());
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("result").ValueKind);
         Assert.Equal(
-            "Support request could not be sent. Please try again later.",
+            "Support email delivery is temporarily unavailable. Please try again later.",
             root.GetProperty("errorMessages")[0].GetString());
+    }
+
+    [Theory]
+    [InlineData("", "Description", "guest@example.com")]
+    [InlineData("Title", "", "guest@example.com")]
+    [InlineData("Title", "Description", "invalid-email")]
+    public async Task SupportRequest_InvalidInputStillReturnsBadRequest(string title, string description, string email)
+    {
+        await using var factory = new MealAppApiFactory();
+        using var client = factory.CreateClient();
+        using var content = CreateSupportFormContent(title, description, email: email);
+        using var response = await client.PostAsync("/api/support", content);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("image/jpeg", "test.jpg")]
+    [InlineData("image/png", "test.png")]
+    [InlineData("image/webp", "test.webp")]
+    public async Task SupportRequest_ValidImageReturnsServiceUnavailable(string contentType, string fileName)
+    {
+        await using var factory = new MealAppApiFactory();
+        using var client = factory.CreateClient();
+        using var content = CreateSupportFormContent("Title", "Description", email: "guest@example.com");
+        var image = new ByteArrayContent([1, 2, 3]);
+        image.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        content.Add(image, "image", fileName);
+        using var response = await client.PostAsync("/api/support", content);
+        await AssertSupportUnavailableAsync(response);
+    }
+
+    [Fact]
+    public async Task SupportRequest_OversizedImageStillReturnsBadRequest()
+    {
+        await using var factory = new MealAppApiFactory();
+        using var client = factory.CreateClient();
+        using var content = CreateSupportFormContent("Title", "Description", email: "guest@example.com");
+        var image = new ByteArrayContent(new byte[5 * 1024 * 1024 + 1]);
+        image.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+        content.Add(image, "image", "test.png");
+        using var response = await client.PostAsync("/api/support", content);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("Image size cannot be greater than 5 MB.", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task SupportRequest_AuthenticatedAccountMustStillExist()
+    {
+        await using var factory = new MealAppApiFactory();
+        using var client = factory.CreateClient();
+        var email = CreateEmail();
+        await RegisterUserAsync(factory, client, email);
+        var token = await LoginAndGetTokenAsync(client, email);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            context.Users.Remove(await context.Users.SingleAsync(user => user.Email == email));
+            await context.SaveChangesAsync();
+        }
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        using var content = CreateSupportFormContent("Title", "Description", email: "guest@example.com");
+        using var response = await client.PostAsync("/api/support", content);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("Authenticated user could not be found.", await response.Content.ReadAsStringAsync());
     }
 
     private static async Task RegisterUserAsync(MealAppApiFactory factory, HttpClient client, string email)
@@ -1551,11 +1614,8 @@ public record CategoryDeleteSetup(int CategoryId);
 public class MealAppApiFactory : WebApplicationFactory<Program>
 {
     private readonly string _databaseName = $"MealAppTests-{Guid.NewGuid():N}";
-    private readonly bool _supportRequestServiceShouldFail;
-
-    public MealAppApiFactory(bool supportRequestServiceShouldFail = false)
+    public MealAppApiFactory()
     {
-        _supportRequestServiceShouldFail = supportRequestServiceShouldFail;
         Environment.SetEnvironmentVariable("Jwt__Secret", "MealAppIntegrationTestSecretKey-ChangeThis");
         Environment.SetEnvironmentVariable("Jwt__Issuer", "MealApp");
         Environment.SetEnvironmentVariable("Jwt__Audience", "MealAppUsers");
@@ -1595,10 +1655,6 @@ public class MealAppApiFactory : WebApplicationFactory<Program>
             services.AddDataProtection()
                 .PersistKeysToFileSystem(new DirectoryInfo(
                     Path.Combine(AppContext.BaseDirectory, "data-protection-keys", _databaseName)));
-
-            services.RemoveAll<ISupportRequestService>();
-            services.AddScoped<ISupportRequestService>(_ =>
-                new TestSupportRequestService(_supportRequestServiceShouldFail));
         });
     }
 
@@ -1610,25 +1666,5 @@ public class MealAppApiFactory : WebApplicationFactory<Program>
         RoleSeeder.SeedRolesAsync(scope.ServiceProvider).GetAwaiter().GetResult();
 
         return host;
-    }
-}
-
-public class TestSupportRequestService : ISupportRequestService
-{
-    private readonly bool _shouldFail;
-
-    public TestSupportRequestService(bool shouldFail)
-    {
-        _shouldFail = shouldFail;
-    }
-
-    public Task ReceiveAsync(SupportRequest supportRequest)
-    {
-        if (_shouldFail)
-        {
-            throw new SupportRequestEmailException("Test support email failure.");
-        }
-
-        return Task.CompletedTask;
     }
 }
