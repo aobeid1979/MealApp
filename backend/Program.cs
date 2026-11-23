@@ -6,6 +6,7 @@ using MealApp.Services.Import;
 using MealApp.Services.AgentTools;
 using MealApp.Services.Agent;
 using MealApp.Services.AgentActions;
+using MealApp.Services.Email;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -57,6 +58,8 @@ builder.Services.AddHttpClient<IAgentModelClient, OllamaModelClient>(client => c
     .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddScoped<AgentChatService>();
 builder.Services.AddScoped<AgentConversationService>();
+// Writes verification codes to the console. Replace with a real email sender later.
+builder.Services.AddScoped<IVerificationCodeSender, ConsoleVerificationCodeSender>();
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection"),
@@ -82,7 +85,8 @@ builder.Services.AddCors(options =>
 });
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     {
-        // Email verification is disabled temporarily until SMTP/email provider is configured.
+        // Email verification is handled by AuthController (6-digit code), controlled by
+        // the "EmailVerification:Enabled" setting, not by SignInManager.
         options.SignIn.RequireConfirmedEmail = false;
     })
     .AddEntityFrameworkStores<ApplicationDbContext>()

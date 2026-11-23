@@ -10,6 +10,7 @@ type RegisterResult = {
   lastName: string;
   name: string;
   role: string;
+  requiresEmailVerification?: boolean;
 };
 
 type ApiResponse<T> = {
@@ -21,6 +22,9 @@ type ApiResponse<T> = {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
+// Keep this in sync with the registration rule in AuthController.
+const MINIMUM_AGE = 18;
+
 export default function RegisterPage() {
   const router = useRouter();
   const [firstName, setFirstName] = useState("");
@@ -28,6 +32,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [isError, setIsError] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -44,7 +49,8 @@ export default function RegisterPage() {
         lastName,
         email,
         password,
-        confirmPassword
+        confirmPassword,
+        dateOfBirth
       });
 
       const response = await fetch(`${API_URL}/api/auth/register`, {
@@ -55,8 +61,9 @@ export default function RegisterPage() {
         body: JSON.stringify({
           firstName: firstName.trim(),
           lastName: lastName.trim(),
-          email,
-          password
+          email: email.trim(),
+          password,
+          dateOfBirth
         })
       });
 
@@ -74,6 +81,12 @@ export default function RegisterPage() {
             ? data.errorMessages.join(" ")
             : "Registration failed."
         );
+      }
+
+      if (data.result?.requiresEmailVerification) {
+        // Next step: enter the 6-digit code that was sent to the user's email.
+        router.push(`/verify-email?email=${encodeURIComponent(email.trim())}&registered=1`);
+        return;
       }
 
       setMessage("Registration successful. You can now log in.");
@@ -146,6 +159,24 @@ export default function RegisterPage() {
         </div>
 
         <div>
+          <label className="form-label" htmlFor="date-of-birth">
+            Date of birth
+          </label>
+          <input
+            id="date-of-birth"
+            type="date"
+            value={dateOfBirth}
+            max={getTodayString()}
+            onChange={(event) => setDateOfBirth(event.target.value)}
+            required
+            className="form-input"
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            You must be at least {MINIMUM_AGE} years old. Only used to check your age; it is not saved.
+          </p>
+        </div>
+
+        <div>
           <label className="form-label" htmlFor="password">
             Password
           </label>
@@ -202,13 +233,15 @@ function validateRegisterForm({
   lastName,
   email,
   password,
-  confirmPassword
+  confirmPassword,
+  dateOfBirth
 }: {
   firstName: string;
   lastName: string;
   email: string;
   password: string;
   confirmPassword: string;
+  dateOfBirth: string;
 }) {
   if (!firstName.trim()) {
     throw new Error("First name is required.");
@@ -222,6 +255,20 @@ function validateRegisterForm({
     throw new Error("Enter a valid email address.");
   }
 
+  if (!dateOfBirth) {
+    throw new Error("Date of birth is required.");
+  }
+
+  const age = calculateAge(dateOfBirth);
+
+  if (age === null || age > 120) {
+    throw new Error("Enter a valid date of birth.");
+  }
+
+  if (age < MINIMUM_AGE) {
+    throw new Error(`You must be at least ${MINIMUM_AGE} years old to register.`);
+  }
+
   if (!password) {
     throw new Error("Password is required.");
   }
@@ -229,4 +276,36 @@ function validateRegisterForm({
   if (password !== confirmPassword) {
     throw new Error("Confirm password must match password.");
   }
+}
+
+// Today's date as "YYYY-MM-DD" in the user's local time (for the date picker's max value).
+function getTodayString() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// Whole years between a "YYYY-MM-DD" birth date and today; null if the date is invalid or in the future.
+function calculateAge(dateOfBirth: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateOfBirth);
+
+  if (!match) {
+    return null;
+  }
+
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const today = new Date();
+  const todayYear = today.getUTCFullYear();
+  const todayMonth = today.getUTCMonth() + 1;
+  const todayDay = today.getUTCDate();
+
+  if (year > todayYear || (year === todayYear && (month > todayMonth || (month === todayMonth && day > todayDay)))) {
+    return null;
+  }
+
+  let age = todayYear - year;
+
+  if (todayMonth < month || (todayMonth === month && todayDay < day)) {
+    age--;
+  }
+
+  return age;
 }

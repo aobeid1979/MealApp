@@ -29,6 +29,7 @@ public class AuthAndAuthorizationTests
 
         var response = await client.PostAsJsonAsync("/api/auth/register", new
         {
+            dateOfBirth = "1990-01-01",
             firstName = "Test",
             lastName = "User",
             email,
@@ -59,6 +60,7 @@ public class AuthAndAuthorizationTests
 
         var response = await client.PostAsJsonAsync("/api/auth/register", new
         {
+            dateOfBirth = "1990-01-01",
             firstName = "Another",
             lastName = "User",
             email,
@@ -80,6 +82,7 @@ public class AuthAndAuthorizationTests
 
         var registerResponse = await client.PostAsJsonAsync("/api/auth/register", new
         {
+            dateOfBirth = "1990-01-01",
             firstName = "Test",
             lastName = "User",
             email,
@@ -1120,6 +1123,7 @@ public class AuthAndAuthorizationTests
     {
         var response = await client.PostAsJsonAsync("/api/auth/register", new
         {
+            dateOfBirth = "1990-01-01",
             firstName = "Test",
             lastName = "User",
             email,

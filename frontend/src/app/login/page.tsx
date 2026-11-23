@@ -91,6 +91,12 @@ export default function LoginPage() {
         throw new Error("Unable to connect to the server. Please try again.");
       }
 
+      // 403 = correct password, but the email is not verified yet: go enter the code.
+      if (response.status === 403) {
+        router.push(`/verify-email?email=${encodeURIComponent(trimmedEmail)}`);
+        return;
+      }
+
       if (!data || !data.isSuccess || !response.ok) {
         throw new Error(data?.errorMessages?.[0] ?? `Login failed (HTTP ${response.status}).`);
       }

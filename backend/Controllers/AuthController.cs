@@ -1,8 +1,8 @@
 using MealApp.DTOs;
 using MealApp.Models;
+using MealApp.Services.Email;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -14,25 +14,33 @@ namespace MealApp.Controllers;
 [Route("api/[controller]")]
 public class AuthController : ApiControllerBase
 {
-    // Email verification is disabled temporarily until SMTP/email provider is configured.
-    private static readonly bool EmailVerificationEnabled = false;
+    // Identity's built-in email token provider creates short-lived 6-digit codes.
+    private static readonly string VerificationCodeProvider = Microsoft.AspNetCore.Identity.TokenOptions.DefaultEmailProvider;
+    private const string VerificationCodePurpose = "VerifyEmail";
+    private const string InvalidCodeMessage = "The code is invalid or has expired. Request a new code and try again.";
+    private const string ResendCodeMessage = "If an unverified account exists for this email, a new code has been sent.";
+    private const int MinimumAge = 18;
+    private const int MaximumAge = 120;
 
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IConfiguration _configuration;
-    private readonly IWebHostEnvironment _environment;
+    private readonly IVerificationCodeSender _verificationCodeSender;
     private readonly ILogger<AuthController> _logger;
 
     public AuthController(
         UserManager<ApplicationUser> userManager,
         IConfiguration configuration,
-        IWebHostEnvironment environment,
+        IVerificationCodeSender verificationCodeSender,
         ILogger<AuthController> logger)
     {
         _userManager = userManager;
         _configuration = configuration;
-        _environment = environment;
+        _verificationCodeSender = verificationCodeSender;
         _logger = logger;
     }
+
+    // Turned on with "EmailVerification:Enabled" (on in Development, off by default elsewhere).
+    private bool EmailVerificationEnabled => _configuration.GetValue<bool>("EmailVerification:Enabled");
 
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterDto registerDto)
@@ -40,6 +48,16 @@ public class AuthController : ApiControllerBase
         var email = registerDto.Email.Trim();
         var firstName = registerDto.FirstName.Trim();
         var lastName = registerDto.LastName.Trim();
+
+        var ageError = ValidateDateOfBirth(registerDto.DateOfBirth!.Value);
+
+        if (ageError is not null)
+        {
+            return BadRequest(new
+            {
+                Message = ageError
+            });
+        }
 
         var existingUser = await _userManager.FindByEmailAsync(email);
 
@@ -51,6 +69,8 @@ public class AuthController : ApiControllerBase
             });
         }
 
+        var requiresVerification = EmailVerificationEnabled;
+
         var user = new ApplicationUser
         {
             UserName = email,
@@ -58,7 +78,7 @@ public class AuthController : ApiControllerBase
             FirstName = firstName,
             LastName = lastName,
             Name = $"{firstName} {lastName}".Trim(),
-            EmailConfirmed = !EmailVerificationEnabled
+            EmailConfirmed = !requiresVerification
         };
 
         var result = await _userManager.CreateAsync(user, registerDto.Password);
@@ -83,28 +103,17 @@ public class AuthController : ApiControllerBase
             });
         }
 
-        if (EmailVerificationEnabled)
+        if (requiresVerification)
         {
-            var confirmationToken = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            var frontendBaseUrl = _configuration["Frontend:BaseUrl"] ?? "http://localhost:3000";
-            var confirmationLink = QueryHelpers.AddQueryString(
-                $"{frontendBaseUrl.TrimEnd('/')}/confirm-email",
-                new Dictionary<string, string?>
-                {
-                    ["userId"] = user.Id,
-                    ["token"] = confirmationToken
-                });
-
-            if (_environment.IsDevelopment())
-            {
-                _logger.LogInformation("Development email confirmation link: {ConfirmationLink}", confirmationLink);
-                _logger.LogInformation("Development email confirmation token: {ConfirmationToken}", confirmationToken);
-            }
+            await SendVerificationCodeAsync(user);
         }
 
         return Ok(new
         {
-            Message = "Registration successful. You can now log in.",
+            Message = requiresVerification
+                ? "Registration successful. We sent a 6-digit code to your email. Enter it to activate your account."
+                : "Registration successful. You can now log in.",
+            RequiresEmailVerification = requiresVerification,
             Email = user.Email,
             FirstName = user.FirstName,
             LastName = user.LastName,
@@ -113,41 +122,92 @@ public class AuthController : ApiControllerBase
         });
     }
 
-    [HttpGet("confirm-email")]
-    public async Task<IActionResult> ConfirmEmail(string userId, string token)
+    [HttpPost("verify-email")]
+    public async Task<IActionResult> VerifyEmail(VerifyEmailDto verifyEmailDto)
     {
-        if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(token))
-        {
-            return BadRequest(new
-            {
-                Message = "Invalid email confirmation request."
-            });
-        }
+        var user = await _userManager.FindByEmailAsync(verifyEmailDto.Email.Trim());
 
-        var user = await _userManager.FindByIdAsync(userId);
-
+        // Same answer for unknown emails and wrong codes, so the endpoint does not reveal who has an account.
         if (user is null)
         {
             return BadRequest(new
             {
-                Message = "Invalid email confirmation request."
+                Message = InvalidCodeMessage
             });
         }
 
-        var result = await _userManager.ConfirmEmailAsync(user, token);
+        if (user.EmailConfirmed)
+        {
+            return Ok(new
+            {
+                Message = "Your email is already verified. You can log in."
+            });
+        }
 
-        if (!result.Succeeded)
+        if (await _userManager.IsLockedOutAsync(user))
+        {
+            return StatusCode(StatusCodes.Status429TooManyRequests, new ApiResponse
+            {
+                IsSuccess = false,
+                StatusCode = StatusCodes.Status429TooManyRequests,
+                ErrorMessages = ["Too many wrong codes. Wait a few minutes, then request a new code."]
+            });
+        }
+
+        var codeIsValid = await _userManager.VerifyUserTokenAsync(
+            user,
+            VerificationCodeProvider,
+            VerificationCodePurpose,
+            verifyEmailDto.Code.Trim());
+
+        if (!codeIsValid)
+        {
+            // Counts wrong guesses; Identity locks the account for a few minutes after repeated failures.
+            await _userManager.AccessFailedAsync(user);
+
+            return BadRequest(new
+            {
+                Message = InvalidCodeMessage
+            });
+        }
+
+        user.EmailConfirmed = true;
+        var updateResult = await _userManager.UpdateAsync(user);
+
+        if (!updateResult.Succeeded)
         {
             return BadRequest(new
             {
-                Message = "Email confirmation failed.",
-                Errors = result.Errors.Select(error => error.Description)
+                Message = "Email verification failed.",
+                Errors = updateResult.Errors.Select(error => error.Description)
             });
         }
 
+        await _userManager.ResetAccessFailedCountAsync(user);
+
         return Ok(new
         {
-            Message = "Email confirmed successfully."
+            Message = "Your email is verified. You can now log in."
+        });
+    }
+
+    [HttpPost("resend-verification-code")]
+    public async Task<IActionResult> ResendVerificationCode(ResendVerificationCodeDto resendDto)
+    {
+        if (EmailVerificationEnabled)
+        {
+            var user = await _userManager.FindByEmailAsync(resendDto.Email.Trim());
+
+            if (user is not null && !user.EmailConfirmed)
+            {
+                await SendVerificationCodeAsync(user);
+            }
+        }
+
+        // Always the same answer, so the endpoint does not reveal who has an account.
+        return Ok(new
+        {
+            Message = ResendCodeMessage
         });
     }
 
@@ -165,14 +225,6 @@ public class AuthController : ApiControllerBase
             });
         }
 
-        if (EmailVerificationEnabled && !await _userManager.IsEmailConfirmedAsync(user))
-        {
-            return BadRequest(new
-            {
-                Message = "Please verify your email before logging in."
-            });
-        }
-
         var passwordIsValid = await _userManager.CheckPasswordAsync(user, loginDto.Password);
 
         if (!passwordIsValid)
@@ -180,6 +232,17 @@ public class AuthController : ApiControllerBase
             return Unauthorized(new
             {
                 Message = "Invalid email or password."
+            });
+        }
+
+        // Checked after the password, so only the account owner learns the account is unverified.
+        if (EmailVerificationEnabled && !await _userManager.IsEmailConfirmedAsync(user))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new ApiResponse
+            {
+                IsSuccess = false,
+                StatusCode = StatusCodes.Status403Forbidden,
+                ErrorMessages = ["Please verify your email before logging in."]
             });
         }
 
@@ -194,6 +257,57 @@ public class AuthController : ApiControllerBase
             Role = roles.FirstOrDefault(),
             Token = token
         });
+    }
+
+    private string? ValidateDateOfBirth(DateOnly dateOfBirth)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        if (dateOfBirth > today)
+        {
+            return "Date of birth cannot be in the future.";
+        }
+
+        var age = CalculateAge(dateOfBirth, today);
+
+        if (age > MaximumAge)
+        {
+            return "Please enter a valid date of birth.";
+        }
+
+        if (age < MinimumAge)
+        {
+            return $"You must be at least {MinimumAge} years old to register.";
+        }
+
+        return null;
+    }
+
+    private static int CalculateAge(DateOnly dateOfBirth, DateOnly today)
+    {
+        var age = today.Year - dateOfBirth.Year;
+
+        if (dateOfBirth > today.AddYears(-age))
+        {
+            age--;
+        }
+
+        return age;
+    }
+
+    private async Task SendVerificationCodeAsync(ApplicationUser user)
+    {
+        var code = await _userManager.GenerateUserTokenAsync(user, VerificationCodeProvider, VerificationCodePurpose);
+
+        try
+        {
+            await _verificationCodeSender.SendAsync(user.Email!, code, HttpContext.RequestAborted);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // The account still exists; the user can ask for a new code from the verify page.
+            _logger.LogError(exception, "Sending the verification code failed.");
+        }
     }
 
     private string CreateJwtToken(ApplicationUser user, IEnumerable<string> roles)

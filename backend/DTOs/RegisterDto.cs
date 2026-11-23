@@ -18,4 +18,8 @@ public class RegisterDto
 
     [Required]
     public string Password { get; set; } = string.Empty;
+
+    // Used only to check the minimum age at registration; it is not stored.
+    [Required(ErrorMessage = "Date of birth is required.")]
+    public DateOnly? DateOfBirth { get; set; }
 }
